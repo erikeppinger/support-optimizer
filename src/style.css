@@ -1,0 +1,515 @@
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #1a1a1e;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+#viewer {
+  width: 100%;
+  height: 100%;
+}
+
+#viewer canvas {
+  display: block;
+}
+
+#drop-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: rgba(30, 60, 200, 0);
+  border: 3px dashed transparent;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+#drop-overlay.active {
+  background: rgba(30, 60, 200, 0.15);
+  border-color: rgba(120, 160, 255, 0.8);
+}
+
+#drop-overlay-inner {
+  color: #eee;
+  font-size: 1.4rem;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+#drop-overlay.active #drop-overlay-inner {
+  opacity: 1;
+}
+
+#status {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  max-width: min(600px, calc(100vw - 24px));
+  color: #ccc;
+  font-size: 0.85rem;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 6px 10px;
+  border-radius: 4px;
+  pointer-events: none;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+#status.error {
+  color: #ff8080;
+}
+
+#version-badge {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  color: #666;
+  font-size: 0.72rem;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  pointer-events: none;
+  user-select: none;
+}
+
+#controls-panel {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  max-width: min(320px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #ddd;
+  font-size: 0.85rem;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 10px 12px;
+  border-radius: 4px;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+#controls-panel input[type="range"] {
+  width: 220px;
+}
+
+#controls-panel details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+#controls-panel summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #eee;
+  padding: 2px 0;
+  user-select: none;
+}
+
+#controls-panel summary::-webkit-details-marker {
+  color: #888;
+}
+
+#controls-panel details[open] summary {
+  margin-bottom: 2px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 6px;
+}
+
+#cancel-btn {
+  margin-bottom: 2px;
+}
+
+.input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* A slider's caption plus its "?" button. #controls-panel sets
+   word-break: break-word for long status/log strings, which on a narrow
+   panel could break a caption like "Cross-section: off" mid-word and
+   strand "section: off" on its own line. Keeping the caption on one line
+   and letting the row itself be the flex container fixes that without
+   giving up the panel-wide wrapping everything else relies on. */
+.slider-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.slider-label label {
+  white-space: nowrap;
+}
+
+#cross-section-reset {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  background: #3a3a40;
+  color: #ddd;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+#cross-section-reset:hover {
+  background: #4a4a52;
+}
+
+#controls-panel .input-row input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+
+/* A label (block, per #controls-panel details' flex-column stacking) with
+   its help button as a plain trailing inline child — NOT a flex row like
+   .slider-label, since these labels are long enough to actually need to
+   wrap. Deliberately just relies on normal inline flow: keeps the button
+   glued to the end of the label text and wrapping down together with it,
+   instead of the two being separate flex items that can end up positioned
+   independently of where the label's own text actually wraps to. */
+.field-label {
+  display: block;
+}
+
+.help-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  margin-left: 4px;
+  width: 15px;
+  height: 15px;
+  /* Inside a row-flex parent (.void-row, .input-row), a wrapped multi-line
+     label competing for space would otherwise shrink this along with it
+     (default flex-shrink: 1), squashing the "?" circle into an oval jammed
+     against the row's edge instead of a clean fixed-size button. */
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #4a5568;
+  color: #ddd;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+}
+
+.help-btn:hover,
+.help-btn:focus-visible {
+  background: #3a5bdc;
+  color: #fff;
+  outline: none;
+}
+
+/* Persistent side note-box: opening help never reflows the controls
+   panel next to it, unlike the inline-disclosure design this replaced.
+   Slides in from the right, independent of #controls-panel's own scroll
+   position/height. */
+#help-panel {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: min(300px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: rgba(20, 24, 34, 0.95);
+  border: 1px solid rgba(120, 160, 255, 0.35);
+  border-left: 3px solid #3a5bdc;
+  border-radius: 4px;
+  color: #ccc;
+  font-size: 0.78rem;
+  line-height: 1.55;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+  transform: translateX(calc(100% + 24px));
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+  z-index: 10;
+}
+
+#help-panel.open {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#help-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-weight: 600;
+  color: #9ecbff;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+}
+
+#help-panel-close {
+  background: none;
+  border: none;
+  color: #999;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+#help-panel-close:hover {
+  color: #fff;
+}
+
+#help-panel-content {
+  padding: 10px 12px;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+#help-panel-content .formula {
+  display: block;
+  margin-top: 6px;
+  padding: 5px 7px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 3px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 0.72rem;
+  color: #9ecbff;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+#help-panel-content code {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 0.72rem;
+  color: #9ecbff;
+}
+
+#scale-current-size:not(:empty) {
+  color: #999;
+  font-style: italic;
+}
+
+#controls-panel input[type="number"] {
+  width: 100px;
+}
+
+/* A native <select> sizes itself to fit its widest OPTION text by
+   default, regardless of its container — several of this panel's option
+   lists (e.g. "Extreme (180³) — slow on large structures") are long
+   enough to push the closed box past the panel's own width, which is
+   what showed up as a horizontal scrollbar once enough sections were
+   open to reveal one. max-width caps it at whatever the flex column
+   actually gives it; the select's own text then simply truncates/ellides
+   in the closed box rather than forcing the panel wider. */
+#controls-panel select {
+  max-width: 100%;
+}
+
+/* Pin an explicit height/box-sizing so a <select> and a text/number
+   <input> always render at the exact same box height. Left to browser/OS
+   defaults, a native-themed control (as WebView2 in the desktop build can
+   render) sizes a <select> a couple pixels taller than an <input> — which
+   is what made the scale-percent and scale-target rows (one all-input,
+   one select+input) swap heights and visibly shift everything below them
+   when switching "By percentage" / "To target size (mm)". */
+#controls-panel select,
+#controls-panel input[type="number"],
+#controls-panel input[type="text"] {
+  height: 22px;
+  box-sizing: border-box;
+  padding: 1px 4px;
+}
+
+#optimize-btn,
+#export-btn,
+#export-3mf-btn,
+#detect-voids-btn,
+#apply-fill-btn,
+#apply-scale-btn,
+#undo-btn,
+#cancel-btn {
+  margin-top: 4px;
+  padding: 6px 10px;
+  background: #3a5bdc;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: normal;
+  overflow-wrap: break-word;
+  width: 100%;
+}
+
+#export-btn {
+  background: #2f8f4e;
+}
+
+#export-3mf-btn {
+  background: #1f8f8a;
+}
+
+#apply-fill-btn {
+  background: #a3651f;
+}
+
+#apply-scale-btn {
+  background: #6a3fb5;
+}
+
+#undo-btn {
+  background: #6b6b6b;
+}
+
+#optimize-btn:disabled,
+#export-btn:disabled,
+#export-3mf-btn:disabled,
+#detect-voids-btn:disabled,
+#apply-fill-btn:disabled,
+#apply-scale-btn:disabled,
+#undo-btn:disabled {
+  /* Fading each button's own accent color (rather than flattening every
+     button to the same neutral gray) keeps a visible before/after contrast
+     even for #undo-btn, whose enabled color is already a neutral gray. */
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+#chain-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+#chain-legend:not(:empty) {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+.legend-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-swatch {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  vertical-align: middle;
+  margin-right: 2px;
+}
+
+#session-log {
+  max-height: 120px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 0.75rem;
+  color: #aaa;
+}
+
+#session-log:not(:empty) {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+#voids-list {
+  max-height: 280px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+#voids-list:not(:empty) {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+.void-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.void-row-readonly {
+  color: #999;
+  font-style: italic;
+}
+
+.void-row-oversized {
+  color: #ffb74d;
+}
+
+.void-row-warning {
+  font-weight: 600;
+}
+
+.void-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 8px;
+}
+
+.void-group-title {
+  font-weight: 600;
+  color: #eee;
+  font-size: 0.82rem;
+}
+
+.void-group-sub {
+  font-weight: 400;
+  color: #999;
+  font-size: 0.76rem;
+}
+
+#stats-panel:not(:empty) {
+  background: rgba(255, 167, 38, 0.12);
+  border-left: 3px solid #ffa726;
+  border-radius: 4px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
