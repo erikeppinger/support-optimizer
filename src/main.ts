@@ -14,7 +14,7 @@ import {
   OVERHANG_COLOR_HEX,
 } from "./geometry/overhang-cost";
 import { evaluateOrientationCost } from "./geometry/orientation-search";
-import type { SupportPathsResult } from "./geometry/support-paths";
+import type { SupportPathsResult, SupportStyle } from "./geometry/support-paths";
 import { buildSupportPathsGroup, disposeSupportPathsGroup } from "./viewer/support-paths-visual";
 import { createTextSprite } from "./viewer/text-sprite";
 import type { ChainMeshEntry, Atom } from "./geometry/pdb";
@@ -262,11 +262,21 @@ or to whatever surface occludes it first)</span>
       )}
       <div class="void-row">
         <input type="checkbox" id="show-support-paths" />
-        <label for="show-support-paths">Show organic support paths</label>${help(
-          `Illustrative only — not a real slicer simulation. Overhang triangle centroids are bucketed into a grid and area-weighted into "roots"; each is raycast straight down to find where it lands (the plate, or another surface that occludes it first — bridging). Roots landing on the plate are greedily merged pairwise by proximity as they descend, approximating how tree supports fuse into fewer trunks near the bed.<br><br>
-          Each merge's own connecting segments are kept within the critical overhang angle (above) of vertical — same limit as the model's own faces, since a support branch is printed the same way the part is. A pair that would need a shallower, unprintable connector to merge is left unmerged that round (tried again against other tips, or routed straight to the plate independently) rather than drawing a segment that couldn't actually be printed as-is.<br><br>
+        <label for="show-support-paths">Show support paths</label>${help(
+          `Illustrative only — not a real slicer simulation, and never affects what gets exported. All three styles start from the same overhang triangles, bucketed into a grid and area-weighted into "roots", each raycast straight down to find where it lands (the plate, or another surface that occludes it first — bridging).<br><br>
+          <strong>Organic</strong> — roots landing on the plate are greedily merged pairwise by proximity as they descend, approximating how tree supports fuse into fewer trunks near the bed. Each merge's own connecting segments are kept within the critical overhang angle (above) of vertical — same limit as the model's own faces, since a support branch is printed the same way the part is. A pair that would need a shallower, unprintable connector to merge is left unmerged that round (tried again against other tips, or routed straight to the plate independently) rather than drawing a segment that couldn't actually be printed as-is.<br><br>
+          <strong>Snug</strong> — the same roots as Organic (tightly following the real overhang shape), each drawn as its own independent straight vertical column instead of merging into branches.<br><br>
+          <strong>Grid</strong> — roots snapped to a regular lattice instead of the overhang's own shape, each its own straight vertical column — a blockier, more generic pattern.<br><br>
           Runs in the background, so it won't freeze the interface even on a large model — skipped only above 3,000,000 triangles.`,
         )}
+      </div>
+      <div class="input-row">
+        <label for="support-style-select" style="white-space:nowrap">Style:</label>
+        <select id="support-style-select">
+          <option value="organic" selected>Organic (tree-like)</option>
+          <option value="snug">Snug (straight, follows shape)</option>
+          <option value="grid">Grid (straight, regular lattice)</option>
+        </select>
       </div>
       <div class="void-row">
         <input type="checkbox" id="show-comparison" />
@@ -347,6 +357,7 @@ const proxyAdvisoryEl = document.querySelector<HTMLDivElement>("#proxy-advisory"
 const showVoidHighlightsEl = document.querySelector<HTMLInputElement>("#show-void-highlights")!;
 const proxyResolutionEl = document.querySelector<HTMLSelectElement>("#proxy-resolution")!;
 const showSupportPathsEl = document.querySelector<HTMLInputElement>("#show-support-paths")!;
+const supportStyleSelectEl = document.querySelector<HTMLSelectElement>("#support-style-select")!;
 const showComparisonEl = document.querySelector<HTMLInputElement>("#show-comparison")!;
 const statsPanelEl = document.querySelector<HTMLDivElement>("#stats-panel")!;
 const scaleCurrentSizeEl = document.querySelector<HTMLDivElement>("#scale-current-size")!;
@@ -866,6 +877,7 @@ function requestSupportPaths(geometry: THREE.BufferGeometry, onResult: (result: 
     position: position.slice(),
     normal: normal.slice(),
     criticalAngleDeg,
+    style: supportStyleSelectEl.value as SupportStyle,
   };
   getSupportPathsWorker().postMessage(request, [request.position.buffer, request.normal.buffer]);
 }
@@ -1363,6 +1375,7 @@ cavityThresholdSliderEl.addEventListener("input", () => {
 });
 
 showSupportPathsEl.addEventListener("change", refreshVisualization);
+supportStyleSelectEl.addEventListener("change", refreshVisualization);
 showComparisonEl.addEventListener("change", refreshVisualization);
 showSubunitColorsEl.addEventListener("change", () => {
   recolorCurrentMesh();

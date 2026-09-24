@@ -6,6 +6,8 @@ Everything runs client-side in the browser (Web Workers do the heavy geometry wo
 
 **About this project:** a personal tool, built almost entirely with AI assistance (Claude) — not an enterprise/production-grade product, and not backed by a team or a support commitment. It's had real testing on real structures, but treat it accordingly: read the code before trusting it with anything that matters, and expect rough edges.
 
+**Related:** [ChimeraX-Save3MF](https://github.com/erikeppinger/chimerax-save3mf) exports a ChimeraX scene (surfaces, cartoons/ribbons, whatever's on screen) as a 3MF with each chain's ChimeraX color carried through as its own extruder — a natural first step before loading the result here for cavity sealing, orientation optimization, and print-ready export.
+
 ## Requirements
 
 - **To run it (any option below):** a modern desktop browser — Chrome, Edge, or Firefox, recent version. Needs WebGL2 and Web Workers, which all of these support by default. Not tested on mobile browsers.

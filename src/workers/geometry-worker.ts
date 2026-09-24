@@ -8,6 +8,7 @@ import { buildChainMeshes, DEFAULT_PROBE_RADIUS, parsePDBAtoms } from "../geomet
 import type { Atom, ChainMeshEntry } from "../geometry/pdb";
 import { parseCIFAtoms } from "../geometry/mmcif";
 import { generateSupportPaths } from "../geometry/support-paths";
+import type { SupportStyle } from "../geometry/support-paths";
 
 export interface OrientationSearchRequest {
   type: "search-orientation";
@@ -85,6 +86,7 @@ export interface GenerateSupportPathsRequest {
   position: Float32Array;
   normal: Float32Array;
   criticalAngleDeg: number;
+  style: SupportStyle;
 }
 
 export type WorkerRequest =
@@ -259,7 +261,7 @@ ctx.onmessage = (e: MessageEvent<WorkerRequest>) => {
 
   if (msg.type === "generate-support-paths") {
     try {
-      const result = generateSupportPaths(msg.position, msg.normal, new THREE.Vector3(0, 0, 1), msg.criticalAngleDeg);
+      const result = generateSupportPaths(msg.position, msg.normal, new THREE.Vector3(0, 0, 1), msg.criticalAngleDeg, { style: msg.style });
       const segments = new Float32Array(result.paths.length * 6);
       for (let i = 0; i < result.paths.length; i++) {
         const [a, b] = result.paths[i].points;

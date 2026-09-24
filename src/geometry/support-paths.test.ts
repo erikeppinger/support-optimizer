@@ -131,3 +131,65 @@ describe("generateSupportPaths branch angle constraint", () => {
     }
   });
 });
+
+describe("generateSupportPaths style", () => {
+  it("'snug' finds the same roots as 'organic' but never merges — one straight vertical segment per root", () => {
+    const { position, normal } = buildScatteredOverhangMesh(300, 100, 40, 7);
+    const up = new THREE.Vector3(0, 0, 1);
+    const organic = generateSupportPaths(position, normal, up, 45, { style: "organic" });
+    const snug = generateSupportPaths(position, normal, up, 45, { style: "snug" });
+
+    expect(snug.rootCount).toBe(organic.rootCount);
+    // Organic merges roots into fewer, branching trunks — so unless
+    // nothing was close enough to merge, it should produce fewer or
+    // differently-shaped paths than one-segment-per-root.
+    expect(snug.paths.length).toBe(snug.rootCount);
+
+    for (const path of snug.paths) {
+      const [a, b] = path.points;
+      // Every snug segment is a pure vertical drop (root straight down to
+      // its landing) — x/y never change within one segment.
+      expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeCloseTo(0, 6);
+    }
+  });
+
+  it("'grid' anchors roots to a regular lattice, still one straight vertical segment per root", () => {
+    const { position, normal } = buildScatteredOverhangMesh(300, 100, 40, 7);
+    const up = new THREE.Vector3(0, 0, 1);
+    const grid = generateSupportPaths(position, normal, up, 45, { style: "grid" });
+
+    expect(grid.rootCount).toBeGreaterThan(0);
+    expect(grid.paths.length).toBe(grid.rootCount);
+
+    for (const path of grid.paths) {
+      const [a, b] = path.points;
+      expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeCloseTo(0, 6);
+    }
+
+    // Lattice-snapped roots should land on a shared, regularly-spaced set
+    // of (x,y) values — the defining difference from "organic"/"snug",
+    // which anchor to the scattered real overhang positions instead.
+    // With >1 distinct x value, the spacing between consecutive sorted
+    // values should be consistent (a real lattice), not arbitrary.
+    const xs = [...new Set(grid.paths.map((p) => Number(p.points[0].x.toFixed(4))))].sort((a, b) => a - b);
+    if (xs.length > 2) {
+      const gaps = xs.slice(1).map((x, i) => x - xs[i]);
+      const minGap = Math.min(...gaps);
+      for (const gap of gaps) {
+        // Every gap should be a near-integer multiple of the smallest gap
+        // (the lattice spacing) — not scattered arbitrary distances.
+        const ratio = gap / minGap;
+        expect(Math.abs(ratio - Math.round(ratio))).toBeLessThan(0.05);
+      }
+    }
+  });
+
+  it("defaults to 'organic' when style is omitted", () => {
+    const { position, normal } = buildScatteredOverhangMesh(300, 100, 40, 7);
+    const up = new THREE.Vector3(0, 0, 1);
+    const withDefault = generateSupportPaths(position, normal, up, 45);
+    const explicit = generateSupportPaths(position, normal, up, 45, { style: "organic" });
+    expect(withDefault.paths.length).toBe(explicit.paths.length);
+    expect(withDefault.rootCount).toBe(explicit.rootCount);
+  });
+});

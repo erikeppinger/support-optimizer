@@ -12,6 +12,18 @@ export interface SupportPathsResult {
   totalLength: number;
 }
 
+/**
+ * Three illustrative styles, all sharing the same underlying overhang
+ * clustering and landing-raycast machinery below — see generateSupportPaths.
+ * - "organic": roots follow the overhang's own shape and merge into
+ *   branches as they descend toward the plate.
+ * - "snug": the same shape-following roots as "organic", but each drawn
+ *   as its own independent straight vertical column instead of merging.
+ * - "grid": roots snapped to a regular lattice instead of the overhang's
+ *   own shape, each its own straight vertical column.
+ */
+export type SupportStyle = "organic" | "snug" | "grid";
+
 export interface SupportPathOptions {
   /** Overhang points within this many buckets get clustered into one
    * root, and roots within it get considered for branch-merging. Given
@@ -23,6 +35,7 @@ export interface SupportPathOptions {
    * is before merging" the tree looks. */
   mergeDropFraction?: number;
   maxRoots?: number;
+  style?: SupportStyle;
 }
 
 const DEFAULTS = {
@@ -30,6 +43,7 @@ const DEFAULTS = {
   mergeRadiusFraction: 0.12,
   mergeDropFraction: 0.05,
   maxRoots: 200,
+  style: "organic" as SupportStyle,
 };
 
 function computeBoundingRadius(position: Float32Array): number {
@@ -52,24 +66,33 @@ interface Root {
 }
 
 /**
- * Illustrative "organic" support paths: NOT a real support generator or
- * slicer simulation, just a plausible-looking visualization of where
- * tree-style supports would roughly go, for UI comparison purposes.
+ * Illustrative support paths (see SupportStyle for the three styles): NOT
+ * a real support generator or slicer simulation, just a plausible-looking
+ * visualization of where supports would roughly go, for UI comparison
+ * purposes.
  *
- * Overhang face centroids are clustered into a manageable number of
- * "roots" (grid-bucketed, area-weighted), each raycast straight down to
- * find its landing point (build plate, or another part of the mesh if
- * one occludes it first — bridging). Roots that land on the plate get
- * greedily merged pairwise by proximity as they "descend" toward it,
- * approximating how tree supports fuse into fewer trunks near the bed —
- * each merge step's own connecting segments are kept within
- * `criticalAngleDeg` of vertical (skipping a pair rather than joining
- * them at a shallower, unprintable angle), the same limit applied to the
- * model's own overhangs, since a support branch is printed the same way
- * the part is; roots landing elsewhere (bridging onto the model itself)
- * are drawn as independent straight (always vertical, always printable)
- * segments, since merging only makes geometric sense between branches
- * heading to the same target.
+ * Overhang face centroids are always clustered into a manageable number
+ * of "roots" (grid-bucketed, area-weighted) the same way regardless of
+ * style. "organic" and "snug" anchor each root to the real triangle
+ * centroid nearest its bucket's weighted average, tightly following the
+ * overhang's own shape; "grid" instead anchors each root to its bucket's
+ * regular lattice cell center, raycasting down from above the model to
+ * find whatever real surface point sits there. Either way, each root is
+ * then raycast straight down to find its landing point (build plate, or
+ * another part of the mesh if one occludes it first — bridging).
+ *
+ * For "organic" only, roots that land on the plate get greedily merged
+ * pairwise by proximity as they "descend" toward it, approximating how
+ * tree supports fuse into fewer trunks near the bed — each merge step's
+ * own connecting segments are kept within `criticalAngleDeg` of vertical
+ * (skipping a pair rather than joining them at a shallower, unprintable
+ * angle), the same limit applied to the model's own overhangs, since a
+ * support branch is printed the same way the part is; roots landing
+ * elsewhere (bridging onto the model itself) are drawn as independent
+ * straight (always vertical, always printable) segments regardless of
+ * style, since merging only makes geometric sense between branches
+ * heading to the same target. "snug" and "grid" skip merging entirely —
+ * every root gets its own independent straight column.
  */
 export function generateSupportPaths(
   position: Float32Array,
@@ -83,6 +106,7 @@ export function generateSupportPaths(
     mergeRadiusFraction = DEFAULTS.mergeRadiusFraction,
     mergeDropFraction = DEFAULTS.mergeDropFraction,
     maxRoots = DEFAULTS.maxRoots,
+    style = DEFAULTS.style,
   } = options;
 
   const boundingRadius = computeBoundingRadius(position);
@@ -107,12 +131,17 @@ export function generateSupportPaths(
   // different fractional offsets relative to each copy's own features,
   // occasionally splitting/merging clusters differently near a boundary
   // and skewing the very "before vs after" stats this is meant to show.
-  let minProj = Infinity, uOrigin = Infinity, vOrigin = Infinity;
+  // maxProj (only needed for "grid" style, to start its downward
+  // find-the-real-surface raycast from safely above everything) is
+  // tracked alongside for the same reason minProj is: cheap to get in
+  // the same pass, and anchored to this mesh's own bounds.
+  let minProj = Infinity, maxProj = -Infinity, uOrigin = Infinity, vOrigin = Infinity;
   for (let i = 0; i < vertCount; i++) {
     const b = i * 3;
     const x = position[b], y = position[b + 1], z = position[b + 2];
     const proj = x * ux + y * uy + z * uz;
     if (proj < minProj) minProj = proj;
+    if (proj > maxProj) maxProj = proj;
     const uCoord = x * uAxis.x + y * uAxis.y + z * uAxis.z;
     if (uCoord < uOrigin) uOrigin = uCoord;
     const vCoord = x * vAxis.x + y * vAxis.y + z * vAxis.z;
@@ -121,8 +150,11 @@ export function generateSupportPaths(
 
   // Bucket overhang triangle centroids (area-weighted) by (u,v) cell.
   // `anchor` is filled in by the second pass below: the real triangle
-  // centroid nearest this bucket's area-weighted average.
-  interface Bucket { sumPos: THREE.Vector3; sumArea: number; anchor: THREE.Vector3; anchorDistSq: number; }
+  // centroid nearest this bucket's area-weighted average. `gx`/`gy` (the
+  // cell's own integer grid coordinates, parsed once from its key) are
+  // only used by "grid" style, to anchor a root at the cell's center
+  // instead of at `anchor`.
+  interface Bucket { sumPos: THREE.Vector3; sumArea: number; anchor: THREE.Vector3; anchorDistSq: number; gx: number; gy: number; }
   const buckets = new Map<string, Bucket>();
   const p = new THREE.Vector3();
 
@@ -155,7 +187,8 @@ export function generateSupportPaths(
   forEachOverhangCentroid((key, cx, cy, cz, area) => {
     let bucket = buckets.get(key);
     if (!bucket) {
-      bucket = { sumPos: new THREE.Vector3(), sumArea: 0, anchor: new THREE.Vector3(), anchorDistSq: Infinity };
+      const [gx, gy] = key.split(",").map(Number);
+      bucket = { sumPos: new THREE.Vector3(), sumArea: 0, anchor: new THREE.Vector3(), anchorDistSq: Infinity, gx, gy };
       buckets.set(key, bucket);
     }
     bucket.sumPos.addScaledVector(p.set(cx, cy, cz), area);
@@ -265,8 +298,9 @@ export function generateSupportPaths(
   const MIN_LANDING_T = bucketSize;
   const LANDING_TOLERANCE = boundingRadius * 0.02;
 
-  const roots: Root[] = bucketList.map(({ anchor, sumArea }) => {
-    const rootPos = anchor.clone();
+  /** Shared by every style: raycast straight down from `rootPos` (assumed
+   * already ON the real surface) to find its landing point. */
+  function buildRootFromPosition(rootPos: THREE.Vector3, sumArea: number): Root {
     const ox = rootPos.x + ux * RAY_EPS, oy = rootPos.y + uy * RAY_EPS, oz = rootPos.z + uz * RAY_EPS;
     const rootU = rootPos.dot(uAxis) - uOrigin, rootV = rootPos.dot(vAxis) - vOrigin;
     const t = raycastNearestIndexed(ox, oy, oz, -ux, -uy, -uz, rootU, rootV);
@@ -275,13 +309,49 @@ export function generateSupportPaths(
     const landingT = validT < plateHeight ? validT : plateHeight;
     const landing = rootPos.clone().addScaledVector(up, -landingT);
     return { position: rootPos, area: sumArea, landing, landingHeight: landing.dot(up) };
-  });
+  }
+
+  let roots: Root[];
+  if (style === "grid") {
+    // Anchor each root to its bucket's regular lattice cell CENTER
+    // instead of a real overhang centroid — cast down from safely above
+    // the whole model to find whatever real surface sits there (not
+    // necessarily an overhang face itself, just wherever this grid
+    // column would actually touch the part). A cell with no surface
+    // directly under its exact center (possible even though the cell
+    // contains overhang triangles off-center) is skipped rather than
+    // drawing a column floating in mid-air.
+    const topMargin = boundingRadius * 0.02;
+    roots = bucketList.flatMap(({ gx, gy, sumArea }): Root[] => {
+      const realU = gx * bucketSize, realV = gy * bucketSize;
+      const top = new THREE.Vector3()
+        .addScaledVector(uAxis, uOrigin + realU)
+        .addScaledVector(vAxis, vOrigin + realV)
+        .addScaledVector(up, maxProj + topMargin);
+      const tTouch = raycastNearestIndexed(top.x, top.y, top.z, -ux, -uy, -uz, realU, realV);
+      if (!Number.isFinite(tTouch)) return [];
+      const rootPos = top.clone().addScaledVector(up, -tTouch);
+      return [buildRootFromPosition(rootPos, sumArea)];
+    });
+  } else {
+    roots = bucketList.map(({ anchor, sumArea }) => buildRootFromPosition(anchor.clone(), sumArea));
+  }
 
   const paths: SupportPath[] = [];
   let totalLength = 0;
   function addSegment(a: THREE.Vector3, b: THREE.Vector3) {
     paths.push({ points: [a.clone(), b.clone()] });
     totalLength += a.distanceTo(b);
+  }
+
+  if (style !== "organic") {
+    // "snug"/"grid" never merge — every root, plate-landing or bridging
+    // alike, is just its own independent straight column from root to
+    // landing (always vertical-or-bridging, so always within any
+    // positive angle limit without needing the constraint machinery
+    // below at all).
+    for (const r of roots) addSegment(r.position, r.landing);
+    return { paths, rootCount: roots.length, totalLength };
   }
 
   const plateRoots = roots.filter((r) => Math.abs(r.landingHeight - minProj) <= LANDING_TOLERANCE);
