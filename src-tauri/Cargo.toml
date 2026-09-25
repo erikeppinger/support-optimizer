@@ -1,6 +1,6 @@
 [package]
 name = "support-optimizer"
-version = "1.0.3"
+version = "1.0.4"
 description = "Molecular structure prep for 3D printing: surface generation, cavity sealing, and print-orientation optimization, running client-side in a webview."
 authors = []
 license = ""

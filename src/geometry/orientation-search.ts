@@ -247,9 +247,18 @@ export function searchBestOrientation(
   const compareCandidates = (a: OrientationCandidate, b: OrientationCandidate) =>
     scoreOf(a, stabilityWeight) - scoreOf(b, stabilityWeight);
 
+  // Only the Fibonacci sphere sweep gets the random per-run rotation —
+  // AXIS_ALIGNED_DIRECTIONS stays fixed at the file's own true ±X/±Y/±Z,
+  // preserving its own guarantee (see its comment above) for CAD/STL
+  // parts whose meaningful axes really are the file's own axes. Rotating
+  // those too would have weakened exactly the guarantee they exist for,
+  // in exchange for decorrelating a fixed pattern (the sphere sweep) that
+  // has no such structure-specific meaning to begin with.
   const rotation = randomRotation();
-  const coarseDirs = [...AXIS_ALIGNED_DIRECTIONS, ...sampleSphere(coarseSamples)]
-    .map((dir) => dir.clone().applyQuaternion(rotation));
+  const coarseDirs = [
+    ...AXIS_ALIGNED_DIRECTIONS,
+    ...sampleSphere(coarseSamples).map((dir) => dir.applyQuaternion(rotation)),
+  ];
   const totalSteps = coarseDirs.length + refineTopK * refineGridSize * refineGridSize;
   let done = 0;
 

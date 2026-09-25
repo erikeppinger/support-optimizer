@@ -1,5 +1,5 @@
 import type { Atom } from "./pdb";
-import { VDW_RADII, DEFAULT_RADIUS } from "./pdb";
+import { VDW_RADII, DEFAULT_RADIUS, WATER_RESIDUE_NAMES } from "./pdb";
 
 /**
  * Tokenizes one line of mmCIF data-row text, honoring quoted strings
@@ -84,6 +84,9 @@ export function parseCIFAtoms(cifText: string, onProgress?: (fraction: number) =
     const ixChainAuth = colIndex("auth_asym_id");
     const ixChainLabel = colIndex("label_asym_id");
     const ixChain = ixChainAuth >= 0 ? ixChainAuth : ixChainLabel;
+    const ixCompAuth = colIndex("auth_comp_id");
+    const ixCompLabel = colIndex("label_comp_id");
+    const ixComp = ixCompAuth >= 0 ? ixCompAuth : ixCompLabel;
 
     let k = j;
     while (k < lines.length) {
@@ -100,7 +103,8 @@ export function parseCIFAtoms(cifText: string, onProgress?: (fraction: number) =
       const tokens = tokenizeCifLine(raw);
       if (tokens.length >= headers.length && ixX >= 0 && ixY >= 0 && ixZ >= 0) {
         const group = ixGroup >= 0 ? tokens[ixGroup] : "ATOM";
-        if (group === "ATOM" || group === "HETATM") {
+        const resName = ixComp >= 0 ? tokens[ixComp].toUpperCase() : "";
+        if ((group === "ATOM" || group === "HETATM") && !WATER_RESIDUE_NAMES.has(resName)) {
           const x = parseFloat(tokens[ixX]);
           const y = parseFloat(tokens[ixY]);
           const z = parseFloat(tokens[ixZ]);

@@ -60,6 +60,8 @@ jobs:
           # Update this before tagging each release — see the assets
           # below to download and install for your platform.
           releaseBody: |
+            - Fixed: crystallographic water molecules in PDB/mmCIF files were baked into the printable surface as tiny isolated blobs, disconnected from the main structure — slicers then treated each one as its own tiny floating object needing support, which could shake loose mid-print and jam the print head. Waters are now excluded from every import.
+            - Fixed a rare case where the orientation-search randomization (v1.0.3) could weaken its own guarantee for axis-aligned CAD/STL parts
             - Fixed: drag-and-drop didn't work in the installed Windows app (Tauri was intercepting file drops before the page ever saw them)
             - Tunnels and cavities are now reviewed/filled as two independent lists — finding one no longer resets your review of the other
             - Fixed a horizontal scrollbar appearing when multiple sections were expanded

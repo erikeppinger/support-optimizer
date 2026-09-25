@@ -4,15 +4,17 @@ import { voxelIndex } from "./voxelize";
 
 /** Builds a fixed-column PDB ATOM/HETATM line by placing fields at the
  * exact 0-indexed offsets parsePDBAtoms reads from (cols 13-16 for name,
- * 22 for chain, 31-38/39-46/47-54 for x/y/z, 77-78 for element),
- * independent of whether the string "looks like" a real PDB line. */
-function makeAtomLine(opts: { record?: string; name: string; chain?: string; x: number; y: number; z: number; element?: string }): string {
+ * 18-20 for residue name, 22 for chain, 31-38/39-46/47-54 for x/y/z,
+ * 77-78 for element), independent of whether the string "looks like" a
+ * real PDB line. */
+function makeAtomLine(opts: { record?: string; name: string; resName?: string; chain?: string; x: number; y: number; z: number; element?: string }): string {
   const chars = new Array(80).fill(" ");
   const put = (str: string, start: number) => {
     for (let i = 0; i < str.length; i++) chars[start + i] = str[i];
   };
   put((opts.record ?? "ATOM").padEnd(6), 0);
   put(opts.name.padStart(4), 12);
+  if (opts.resName) put(opts.resName, 17);
   if (opts.chain) put(opts.chain, 21);
   const fmt = (n: number) => n.toFixed(3).padStart(8);
   put(fmt(opts.x), 30);
@@ -36,6 +38,24 @@ describe("parsePDBAtoms", () => {
     expect(atoms[0].y).toBeCloseTo(6.134, 3);
     expect(atoms[0].z).toBeCloseTo(-6.504, 3);
     expect(atoms[1].x).toBeCloseTo(20, 3);
+  });
+
+  it("excludes water HETATM records, but keeps other heteroatoms (ions, ligands)", () => {
+    const text = [
+      makeAtomLine({ name: "N", resName: "ALA", x: 1, y: 1, z: 1, element: "N" }),
+      makeAtomLine({ record: "HETATM", name: "O", resName: "HOH", x: 5, y: 5, z: 5, element: "O" }),
+      makeAtomLine({ record: "HETATM", name: "O", resName: "WAT", x: 6, y: 6, z: 6, element: "O" }),
+      makeAtomLine({ record: "HETATM", name: "O", resName: "H2O", x: 7, y: 7, z: 7, element: "O" }),
+      makeAtomLine({ record: "HETATM", name: "ZN", resName: "ZN", x: 20, y: 10, z: 5, element: "ZN" }),
+    ].join("\n");
+
+    const atoms = parsePDBAtoms(text);
+    // Only the real residue and the zinc ion survive — every water spelling
+    // is dropped, since an isolated one becomes its own tiny disconnected
+    // blob once voxelized (see WATER_RESIDUE_NAMES).
+    expect(atoms).toHaveLength(2);
+    expect(atoms.some((a) => a.x === 20)).toBe(true);
+    expect(atoms.some((a) => a.x === 5 || a.x === 6 || a.x === 7)).toBe(false);
   });
 
   it("assigns element-specific van der Waals radii from the element column", () => {

@@ -29,12 +29,27 @@ export const DEFAULT_RADIUS = 1.7;
  * computation — the universal default in PyMOL, ChimeraX, MSMS, etc. */
 export const DEFAULT_PROBE_RADIUS = 1.4;
 
+/** Crystallographic/cryo-EM water residue names, in every spelling that
+ * actually shows up in deposited PDB/mmCIF files (HOH is overwhelmingly
+ * the modern standard; the rest are older or neutron-structure variants).
+ * Excluded from the surface build unconditionally — unlike an ion or a
+ * bound ligand, a water carries no structural information anyone prints
+ * a model to show, and a single isolated one (common in a solvent
+ * channel or buried pocket) becomes its own tiny watertight blob,
+ * disconnected from the main surface, once voxelized. A slicer then has
+ * no way to tell that apart from a real tiny part — it just sees a small
+ * island floating inside the print with nothing to rest on, and adds
+ * support material to hold IT up too. Exported so mmcif.ts shares the
+ * same list rather than keeping a second copy that could drift. */
+export const WATER_RESIDUE_NAMES = new Set(["HOH", "WAT", "H2O", "DOD"]);
+
 /**
  * Parses ATOM/HETATM records from PDB fixed-column text into atom centers,
- * van-der-Waals radii, and chain identifiers. Element comes from columns
- * 77-78 when present (modern PDB files); older files omit it, so this
- * falls back to stripping digits from the atom name (columns 13-16) the
- * way most PDB tooling does. Chain ID is column 22.
+ * van-der-Waals radii, and chain identifiers — excluding water records
+ * (see WATER_RESIDUE_NAMES), residue name is column 18-20. Element comes
+ * from columns 77-78 when present (modern PDB files); older files omit
+ * it, so this falls back to stripping digits from the atom name (columns
+ * 13-16) the way most PDB tooling does. Chain ID is column 22.
  *
  * MODEL records matter for biological-assembly downloads (`{ID}.pdb1`):
  * the chain ID column is a single character, so a symmetry-expanded
@@ -68,6 +83,7 @@ export function parsePDBAtoms(pdbText: string, onProgress?: (fraction: number) =
       continue;
     }
     if (!line.startsWith("ATOM") && !line.startsWith("HETATM")) continue;
+    if (WATER_RESIDUE_NAMES.has(line.slice(17, 20).trim().toUpperCase())) continue;
     const x = parseFloat(line.slice(30, 38));
     const y = parseFloat(line.slice(38, 46));
     const z = parseFloat(line.slice(46, 54));

@@ -80,6 +80,18 @@ describe("parseCIFAtoms", () => {
     expect(parseCIFAtoms("data_EMPTY\n#\n_entry.id EMPTY\n")).toHaveLength(0);
   });
 
+  it("excludes water HETATM rows, but keeps other heteroatoms (ions, ligands)", () => {
+    const withWater = SAMPLE_CIF.replace(
+      "HETATM 3 ZN ZN . ZN B 2 . ? 20.000 10.000 5.000 1.00 20.00 ? 101 ZN B ZN 1\n",
+      "HETATM 3 ZN ZN . ZN B 2 . ? 20.000 10.000 5.000 1.00 20.00 ? 101 ZN B ZN 1\n" +
+        "HETATM 4 O O . HOH C 3 . ? 5.000 5.000 5.000 1.00 30.00 ? 201 HOH C O 1\n",
+    );
+    const atoms = parseCIFAtoms(withWater);
+    // Still just the residue + the zinc ion — the water row is dropped.
+    expect(atoms).toHaveLength(3);
+    expect(atoms.some((a) => a.x === 5)).toBe(false);
+  });
+
   it("handles a quoted token containing whitespace without misaligning columns", () => {
     const text =
       "loop_\n" +
