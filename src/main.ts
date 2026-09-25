@@ -76,6 +76,14 @@ app.innerHTML = `
         <option value="180">Extreme (180&sup3;) — slow on large structures</option>
         <option value="240">Maximum (240&sup3;) — slow on large structures</option>
       </select>
+      <div class="void-row">
+        <input type="checkbox" id="include-heteroatoms" checked />
+        <label for="include-heteroatoms">Include ions &amp; ligands</label>${help(
+          `Applies to both "Browse for a file…" and "Fetch from RCSB" below, for .pdb/.cif import — a .stl/.3mf import has no atom records to filter.<br><br>
+          Every PDB/mmCIF entry can carry <strong>heteroatoms</strong> alongside the actual protein/nucleic-acid chain: bound ligands, metal ions, and molecules left over from crystallization (buffer salts, cryoprotectants like glycerol or PEG). Water is <strong>always</strong> excluded regardless of this setting — a crystallographic water carries no structural or display value, and a stray one (common in a solvent channel or buried pocket) becomes its own tiny surface fragment, disconnected from the main structure, once voxelized. A slicer then has no way to tell that apart from a real tiny part, and adds support material to hold it up too.<br><br>
+          Other heteroatoms are a genuine judgment call, so this is a choice rather than a hardcoded default: a ligand sitting in a real binding pocket usually overlaps the protein's own surface and merges in fine, but a loose ion or crystallization additive not actually touching the structure hits the exact same disconnected-fragment problem water did. If a print comes out with small floating pieces even after this fix, turn this off and re-import.`,
+        )}
+      </div>
       <input type="file" id="file-input" accept=".stl,.pdb,.3mf,.cif" style="display:none" />
       <button id="browse-btn">Browse for a file…</button>
       <div class="field-label"><label for="fetch-id-input">Fetch from RCSB by ID:</label>${help(
@@ -373,6 +381,7 @@ const cancelBtnEl = document.querySelector<HTMLButtonElement>("#cancel-btn")!;
 const fileInputEl = document.querySelector<HTMLInputElement>("#file-input")!;
 const browseBtnEl = document.querySelector<HTMLButtonElement>("#browse-btn")!;
 const importResolutionEl = document.querySelector<HTMLSelectElement>("#import-resolution")!;
+const includeHeteroatomsEl = document.querySelector<HTMLInputElement>("#include-heteroatoms")!;
 const fetchContentSelectEl = document.querySelector<HTMLSelectElement>("#fetch-content-select")!;
 const chainFilterRowEl = document.querySelector<HTMLDivElement>("#chain-filter-row")!;
 const chainFilterEl = document.querySelector<HTMLSelectElement>("#chain-filter")!;
@@ -1612,7 +1621,13 @@ function buildSurfaceFromAtoms(atoms: Atom[], sourceLabel: string, baseName: str
 function buildSurfaceFromText(text: string, format: "cif" | "pdb", sourceLabel: string, baseName: string) {
   loadedAtomsBaseName = baseName;
   loadedAtomsSourceLabel = sourceLabel;
-  const request: VoxelizePDBRequest = { type: "voxelize-pdb", text, format, resolution: currentResolutionChoice() };
+  const request: VoxelizePDBRequest = {
+    type: "voxelize-pdb",
+    text,
+    format,
+    resolution: currentResolutionChoice(),
+    includeHeteroatoms: includeHeteroatomsEl.checked,
+  };
   runVoxelizePdb(request, sourceLabel, baseName, "the file", []);
 }
 

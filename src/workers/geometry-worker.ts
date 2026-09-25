@@ -65,6 +65,10 @@ export interface VoxelizePDBRequest {
   /** Solvent probe radius (Angstroms) for the Solvent Excluded Surface —
    * defaults to the standard 1.4 (water) if omitted. */
   probeRadius?: number;
+  /** Only meaningful on the text-parsing path — see ParseAtomsOptions.
+   * Ignored when `atoms` is set directly, since those are already
+   * filtered from whenever they were originally parsed. */
+  includeHeteroatoms?: boolean;
 }
 
 /** Same tradeoff the orientation-search proxy makes, just sized against
@@ -310,8 +314,9 @@ ctx.onmessage = (e: MessageEvent<WorkerRequest>) => {
       const parseProgress = (fraction: number) => {
         ctx.postMessage({ type: "progress", fraction: fraction * 0.15 } satisfies WorkerResponse);
       };
+      const parseOptions = { includeHeteroatoms: msg.includeHeteroatoms };
       try {
-        atoms = msg.format === "cif" ? parseCIFAtoms(msg.text, parseProgress) : parsePDBAtoms(msg.text, parseProgress);
+        atoms = msg.format === "cif" ? parseCIFAtoms(msg.text, parseProgress, parseOptions) : parsePDBAtoms(msg.text, parseProgress, parseOptions);
       } catch (err) {
         ctx.postMessage({ type: "parse-error", message: err instanceof Error ? err.message : "unknown parse error" } satisfies WorkerResponse);
         return;

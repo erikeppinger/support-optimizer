@@ -92,6 +92,13 @@ describe("parseCIFAtoms", () => {
     expect(atoms.some((a) => a.x === 5)).toBe(false);
   });
 
+  it("includeHeteroatoms: false drops the zinc ion too, water still always dropped", () => {
+    const atoms = parseCIFAtoms(SAMPLE_CIF, undefined, { includeHeteroatoms: false });
+    // Only the two real ATOM rows (MET N, MET CA) survive — the HETATM zinc is dropped.
+    expect(atoms).toHaveLength(2);
+    expect(atoms.every((a) => a.x !== 20)).toBe(true);
+  });
+
   it("handles a quoted token containing whitespace without misaligning columns", () => {
     const text =
       "loop_\n" +

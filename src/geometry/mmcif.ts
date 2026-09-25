@@ -1,4 +1,4 @@
-import type { Atom } from "./pdb";
+import type { Atom, ParseAtomsOptions } from "./pdb";
 import { VDW_RADII, DEFAULT_RADIUS, WATER_RESIDUE_NAMES } from "./pdb";
 
 /**
@@ -44,7 +44,8 @@ function tokenizeCifLine(line: string): string[] {
  * viewers actually show) over `label_asym_id` (an internal id that often
  * splits/renumbers the same visual chain) for chain grouping.
  */
-export function parseCIFAtoms(cifText: string, onProgress?: (fraction: number) => void): Atom[] {
+export function parseCIFAtoms(cifText: string, onProgress?: (fraction: number) => void, options: ParseAtomsOptions = {}): Atom[] {
+  const { includeHeteroatoms = true } = options;
   const lines = cifText.split("\n");
   const atoms: Atom[] = [];
   let i = 0;
@@ -104,7 +105,12 @@ export function parseCIFAtoms(cifText: string, onProgress?: (fraction: number) =
       if (tokens.length >= headers.length && ixX >= 0 && ixY >= 0 && ixZ >= 0) {
         const group = ixGroup >= 0 ? tokens[ixGroup] : "ATOM";
         const resName = ixComp >= 0 ? tokens[ixComp].toUpperCase() : "";
-        if ((group === "ATOM" || group === "HETATM") && !WATER_RESIDUE_NAMES.has(resName)) {
+        const isHetatm = group === "HETATM";
+        if (
+          (group === "ATOM" || isHetatm) &&
+          !WATER_RESIDUE_NAMES.has(resName) &&
+          !(isHetatm && !includeHeteroatoms)
+        ) {
           const x = parseFloat(tokens[ixX]);
           const y = parseFloat(tokens[ixY]);
           const z = parseFloat(tokens[ixZ]);

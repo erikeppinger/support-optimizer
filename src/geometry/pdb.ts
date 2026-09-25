@@ -43,13 +43,32 @@ export const DEFAULT_PROBE_RADIUS = 1.4;
  * same list rather than keeping a second copy that could drift. */
 export const WATER_RESIDUE_NAMES = new Set(["HOH", "WAT", "H2O", "DOD"]);
 
+/** Options shared by both parsePDBAtoms and parseCIFAtoms. */
+export interface ParseAtomsOptions {
+  /** Non-water HETATM/heteroatom records — ions, bound ligands, buffer
+   * or cryoprotectant molecules. Default true (kept), matching this
+   * app's behavior before this option existed. Water is always excluded
+   * regardless of this setting (see WATER_RESIDUE_NAMES) since it never
+   * carries structural/display value; a heteroatom is more of a
+   * judgment call — a bound ligand can be exactly what someone wants
+   * shown — but the same failure mode applies: an ion or small molecule
+   * sitting apart from the main structure (loose in the solvent region,
+   * not actually bound) becomes its own tiny surface fragment,
+   * disconnected from everything else, once voxelized — precisely the
+   * water problem again, just for a different residue type. Surfaced as
+   * a user-facing choice rather than a hardcoded default because,
+   * unlike water, there's no single right answer for every structure. */
+  includeHeteroatoms?: boolean;
+}
+
 /**
  * Parses ATOM/HETATM records from PDB fixed-column text into atom centers,
  * van-der-Waals radii, and chain identifiers — excluding water records
- * (see WATER_RESIDUE_NAMES), residue name is column 18-20. Element comes
- * from columns 77-78 when present (modern PDB files); older files omit
- * it, so this falls back to stripping digits from the atom name (columns
- * 13-16) the way most PDB tooling does. Chain ID is column 22.
+ * (see WATER_RESIDUE_NAMES) and, unless `includeHeteroatoms` is set,
+ * every other HETATM record too; residue name is column 18-20. Element
+ * comes from columns 77-78 when present (modern PDB files); older files
+ * omit it, so this falls back to stripping digits from the atom name
+ * (columns 13-16) the way most PDB tooling does. Chain ID is column 22.
  *
  * MODEL records matter for biological-assembly downloads (`{ID}.pdb1`):
  * the chain ID column is a single character, so a symmetry-expanded
@@ -64,7 +83,8 @@ export const WATER_RESIDUE_NAMES = new Set(["HOH", "WAT", "H2O", "DOD"]);
  * apart, but the same suffixing keeps them individually selectable, which
  * is the useful behavior there too.
  */
-export function parsePDBAtoms(pdbText: string, onProgress?: (fraction: number) => void): Atom[] {
+export function parsePDBAtoms(pdbText: string, onProgress?: (fraction: number) => void, options: ParseAtomsOptions = {}): Atom[] {
+  const { includeHeteroatoms = true } = options;
   const atoms: Atom[] = [];
   let modelNumber = 1;
   let modelsSeen = 0;
@@ -82,8 +102,12 @@ export function parsePDBAtoms(pdbText: string, onProgress?: (fraction: number) =
       modelNumber = Number.isFinite(parsed) ? parsed : modelsSeen;
       continue;
     }
-    if (!line.startsWith("ATOM") && !line.startsWith("HETATM")) continue;
-    if (WATER_RESIDUE_NAMES.has(line.slice(17, 20).trim().toUpperCase())) continue;
+    const isHetatm = line.startsWith("HETATM");
+    if (!line.startsWith("ATOM") && !isHetatm) continue;
+    if (isHetatm) {
+      if (WATER_RESIDUE_NAMES.has(line.slice(17, 20).trim().toUpperCase())) continue;
+      if (!includeHeteroatoms) continue;
+    }
     const x = parseFloat(line.slice(30, 38));
     const y = parseFloat(line.slice(38, 46));
     const z = parseFloat(line.slice(46, 54));
