@@ -2,14 +2,41 @@ import * as THREE from "three";
 
 export const DEFAULT_CRITICAL_ANGLE_DEG = 45;
 
+const DEFAULT_SAFE_COLOR_HEX = 0x8899ee;
+const DEFAULT_OVERHANG_COLOR_HEX = 0xe23b3b;
+// Okabe-Ito blue/vermillion — same colorblind-safe family CHAIN_PALETTES
+// already offers for chain coloring, reused here for visual consistency
+// whenever "Colorblind-safe colors" is on. Blue-vs-vermillion survives
+// every common form of color vision deficiency; blue-vs-red (the default
+// above) does not reliably for the red-green types, by far the most
+// common.
+const COLORBLIND_SAFE_COLOR_HEX = 0x0072b2;
+const COLORBLIND_OVERHANG_COLOR_HEX = 0xd55e00;
+
 // Exported as plain hex, not just the THREE.Color instances below, so the
 // UI (main.ts's overhang legend) can put the exact same colors in a CSS
 // swatch without redeclaring them — one source of truth for what "the
-// overhang colors" actually are.
-export const SAFE_COLOR_HEX = 0x8899ee;
-export const OVERHANG_COLOR_HEX = 0xe23b3b;
+// overhang colors" actually are. `let`, not `const`: setOverhangColorMode
+// below reassigns both when the colorblind-safe toggle changes, and every
+// reader (including main.ts's legend, via a live import binding) sees the
+// update immediately without needing its own plumbing.
+export let SAFE_COLOR_HEX = DEFAULT_SAFE_COLOR_HEX;
+export let OVERHANG_COLOR_HEX = DEFAULT_OVERHANG_COLOR_HEX;
 const SAFE_COLOR = new THREE.Color(SAFE_COLOR_HEX);
 const OVERHANG_COLOR = new THREE.Color(OVERHANG_COLOR_HEX);
+
+/** Switches the safe/overhang color pair between the default and
+ * colorblind-safe sets. Only updates the color VALUES used by the next
+ * applyOverhangColors/applySubunitColorsWithOverhangHighlight call — the
+ * caller is responsible for re-running one of those (main.ts's
+ * recolorCurrentMesh) to actually repaint whatever's already on screen,
+ * same as switching the chain palette works. */
+export function setOverhangColorMode(colorblindSafe: boolean) {
+  SAFE_COLOR_HEX = colorblindSafe ? COLORBLIND_SAFE_COLOR_HEX : DEFAULT_SAFE_COLOR_HEX;
+  OVERHANG_COLOR_HEX = colorblindSafe ? COLORBLIND_OVERHANG_COLOR_HEX : DEFAULT_OVERHANG_COLOR_HEX;
+  SAFE_COLOR.setHex(SAFE_COLOR_HEX);
+  OVERHANG_COLOR.setHex(OVERHANG_COLOR_HEX);
+}
 
 /** Degrees a face leans past vertical, from its normal's Z component.
  * 0 = vertical wall (self-supporting), 90 = flat downward overhang

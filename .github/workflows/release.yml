@@ -60,18 +60,11 @@ jobs:
           # Update this before tagging each release — see the assets
           # below to download and install for your platform.
           releaseBody: |
-            - New: "Include ions & ligands" toggle for PDB/mmCIF import — non-water heteroatoms (ions, bound ligands, buffer/cryo molecules) can now be excluded before the surface is built, the same way water already is, for structures where a loose one causes the same disconnected-fragment problem
-            - Fixed: crystallographic water molecules in PDB/mmCIF files were baked into the printable surface as tiny isolated blobs, disconnected from the main structure — slicers then treated each one as its own tiny floating object needing support, which could shake loose mid-print and jam the print head. Waters are now excluded from every import.
-            - Fixed a rare case where the orientation-search randomization (v1.0.3) could weaken its own guarantee for axis-aligned CAD/STL parts
-            - Fixed: drag-and-drop didn't work in the installed Windows app (Tauri was intercepting file drops before the page ever saw them)
-            - Tunnels and cavities are now reviewed/filled as two independent lists — finding one no longer resets your review of the other
-            - Fixed a horizontal scrollbar appearing when multiple sections were expanded
-            - Oversized-void safety check: Fill now refuses a "cavity"/"tunnel" that's actually a large fraction of the model's own volume, instead of concatenating a giant patch
-            - Export STL/3MF now opens a native Save As dialog instead of always dropping into Downloads (desktop app only)
-            - Orientation search is no longer biased by a structure's arbitrary file-coordinate pose
-            - Reduced idle GPU usage
-            - Organic support-path preview: choose Organic (tree-like), Snug (straight, follows the model's shape), or Grid (straight, regular lattice) — still illustrative only, never affects export
-            - New app icon
+            - Fixed: a 3MF file that carries color only as slicer paint data (PrusaSlicer's `slic3rpe:mmu_segmentation` / Bambu-Orca's `paint_color` — e.g. files exported by ChimeraX's own 3MF exporter) imported as one flat gray color instead of its original per-part colors
+            - Reworked ion/ligand handling: instead of one global "include ions & ligands" toggle, loading a PDB/mmCIF now shows a checklist of the heteroatoms actually present in that file, so you choose which ones to keep before the surface is built
+            - Fixed: cavity sealing was skipping the large majority of detected voids as "too thin to seal," and got worse (not better) at higher resolution — sealing now erodes by a margin based on how far a cavity actually sits from the model's exterior, instead of one fixed margin for every cavity regardless of depth
+            - New: colorblind-safe color toggle, covering the axis gizmo, overhang shading, and cavity-highlight colors together
+            - The version badge now reads "v: 1.x.y" in the lower-right corner
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}

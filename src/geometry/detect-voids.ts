@@ -3,6 +3,7 @@ import type { VoxelGrid } from "./voxelize";
 import { PAD, voxelIndex } from "./voxelize";
 import { floodFillExterior } from "./flood-fill";
 import { marchingCubes } from "./marching-cubes";
+import { distanceTransform3D } from "./distance-transform";
 
 export type VoidKind = "cavity" | "tunnel";
 
@@ -85,6 +86,14 @@ function toComponent(id: number, kind: VoidKind, voxels: number[], grid: VoxelGr
   return { id, kind, voxelCount: n, centroid, volumeFraction, voxels };
 }
 
+export interface VoidDetectionResult {
+  components: VoidComponent[];
+  /** The exterior-reachable empty-voxel mask from this same flood-fill
+   * pass — exposed so seal-building (buildSealContext) can reuse it
+   * instead of re-running floodFillExterior from scratch. */
+  reached: Uint8Array;
+}
+
 /**
  * Enumerates every distinct internal void as its own component instead of
  * lumping them into one fill-everything operation, so the caller can list
@@ -97,9 +106,11 @@ function toComponent(id: number, kind: VoidKind, voxels: number[], grid: VoxelGr
  *   shell) — a heuristic for "open channel through the part" rather than
  *   the ordinary exterior. Imperfect for concave shapes (some genuinely
  *   exterior space near a concavity can get swept in), but a useful
- *   heads-up regardless. Never fillable — listed for visibility only.
+ *   heads-up regardless. Fillable too (see buildSealPatchMesh) — the
+ *   erosion margin protects a tunnel's own opening the same way it
+ *   protects a cavity from an over-thin exterior wall.
  */
-export function detectVoidComponents(grid: VoxelGrid): VoidComponent[] {
+export function detectVoidComponentsFull(grid: VoxelGrid): VoidDetectionResult {
   const { nx, ny, nz, solid } = grid;
   const reached = floodFillExterior(grid);
 
@@ -119,7 +130,11 @@ export function detectVoidComponents(grid: VoxelGrid): VoidComponent[] {
   for (const voxels of tunnelVoxelSets) components.push(toComponent(id++, "tunnel", voxels, grid));
 
   components.sort((a, b) => b.voxelCount - a.voxelCount);
-  return components;
+  return { components, reached };
+}
+
+export function detectVoidComponents(grid: VoxelGrid): VoidComponent[] {
+  return detectVoidComponentsFull(grid).components;
 }
 
 export function summarize(components: VoidComponent[]): VoidComponentSummary[] {
@@ -193,68 +208,129 @@ export function buildCavityHighlightMesh(grid: VoxelGrid, component: VoidCompone
   return remeshVoxelSubset(grid, component.id, component.voxels);
 }
 
-/** Binary-erodes a voxel set by `margin` steps: a voxel survives a step
- * only if all 6 face-neighbors were also in the set going into that step.
- * Two voxels reached from each other by repeated 6-connected steps are
- * necessarily in the same flood-filled component (that's how the labeling
- * itself works), so any non-solid neighbor of a cavity voxel is
- * guaranteed to be another voxel of that SAME cavity — a neighbor outside
- * the set can only be solid (the shell) or, at the grid boundary, outside
- * the grid entirely (defensive-only; a true enclosed cavity never reaches
- * the grid edge). */
-function erodeVoxelSet(grid: VoxelGrid, voxels: number[], margin: number): number[] {
-  const { nx, ny, nz } = grid;
-  const stepX = 1, stepY = nx, stepZ = nx * ny;
-  let current = voxels;
-  for (let step = 0; step < margin; step++) {
-    const set = new Set(current);
-    const next: number[] = [];
-    for (const idx of current) {
-      const z = Math.floor(idx / stepZ);
-      const y = Math.floor((idx - z * stepZ) / stepY);
-      const x = idx - z * stepZ - y * stepY;
-      if (x <= 0 || x >= nx - 1 || y <= 0 || y >= ny - 1 || z <= 0 || z >= nz - 1) continue;
-      if (
-        set.has(idx - stepX) && set.has(idx + stepX) &&
-        set.has(idx - stepY) && set.has(idx + stepY) &&
-        set.has(idx - stepZ) && set.has(idx + stepZ)
-      ) {
-        next.push(idx);
-      }
-    }
-    current = next;
-    if (current.length === 0) break;
-  }
-  return current;
+export interface SealContext {
+  /** Per-voxel Euclidean distance (in detection-voxel units) to the
+   * nearest SOLID voxel — a real-valued generalization of "how many
+   * voxels of erosion margin can this voxel still afford," rather than
+   * the old binary 6-connected-neighbors-present test, which required a
+   * whole extra voxel of clearance in EVERY one of the 3 axes simultaneously
+   * to survive even one step (so it erased any cavity narrower than 3
+   * voxels across in any single axis, everywhere along its length — most
+   * of a real structure's interior pockets, in practice). A distance
+   * transform lets the margin be fractional and isotropic instead. */
+  solidDist: Float32Array;
+  /** Per-voxel distance to the nearest voxel floodFillExterior actually
+   * reached from outside — i.e. how many voxels of solid material stand
+   * between this point and confirmed open air, through the SHORTEST
+   * path. Used to tell a cavity that's nowhere near the true exterior
+   * (no plausible protrusion risk, however this is sealed) apart from
+   * one separated from it by only a thin wall (where the margin below
+   * still matters). */
+  exteriorDist: Float32Array;
 }
 
-/** How many detection voxels of safety margin to erode off a cavity's
- * boundary before sealing it — see buildSealPatchMesh. */
+/** Builds the two distance fields sealing needs, from the SAME flood-fill
+ * `detectVoidComponentsFull` already ran — pass its `reached` straight
+ * through rather than re-running floodFillExterior. Cheap (two more
+ * linear-time separable passes over the same grid) and shared across
+ * every component being sealed in one Fill operation, so callers should
+ * compute this once per grid, not once per cavity. */
+export function buildSealContext(grid: VoxelGrid, reached: Uint8Array): SealContext {
+  const { nx, ny, nz, solid } = grid;
+  return {
+    solidDist: distanceTransform3D(solid, nx, ny, nz),
+    exteriorDist: distanceTransform3D(reached, nx, ny, nz),
+  };
+}
+
+/** How many detection voxels of safety margin to erode off a TUNNEL's
+ * boundary before sealing it — kept as the original fixed, conservative
+ * margin (never falls back toward 0 the way a cavity's ladder can, see
+ * buildSealPatchMesh) since a tunnel always has a real opening nearby
+ * that a zero-margin seal could wrongly cap shut. */
 const SEAL_EROSION_MARGIN_VOXELS = 1;
 
+/** A cavity that never comes within this many detection voxels of the
+ * true exterior (through solid material, by the shortest path) is far
+ * enough from it that voxelizeSurface's own coarse solid/empty
+ * classification — accurate to roughly ±1 voxel at a thin exterior wall,
+ * see buildSealPatchMesh below — cannot plausibly be wrong by enough to
+ * make a full-extent (zero-margin) seal poke through a real surface.
+ * Comfortably above 1 for margin against that ±1 uncertainty itself. */
+const SAFE_EXTERIOR_DISTANCE_VOXELS = 2;
+
+/** Erosion margins tried for a cavity NOT confirmed far from the
+ * exterior (or for a tunnel — see buildSealPatchMesh), largest/safest
+ * first: the first margin that leaves a non-empty voxel set wins. 1
+ * matches this project's original fixed margin; the smaller fallbacks
+ * are new — sealing a bit closer to a thin cavity's true boundary is a
+ * worthwhile trade against leaving it completely unfilled, which is
+ * exactly the failure this whole adaptive scheme replaces. 0 (no
+ * erosion at all) is deliberately the last resort here, not the
+ * default, since — unlike the "confirmed far from exterior" case above —
+ * this path is only reached when the cavity/tunnel might actually be
+ * close to real open air. */
+const RISKY_EROSION_MARGINS = [1, 0.75, 0.5, 0.25, 0];
+
 /**
- * Builds the actual sealing patch for a cavity — same construction as
- * buildCavityHighlightMesh, but on an ERODED voxel set (shrunk 1 detection
- * voxel in from the cavity's own boundary) rather than the full detected
- * extent, and returns null if erosion leaves nothing (the cavity is too
- * thin, relative to the detection resolution, to seal safely).
+ * Builds the actual sealing patch for a void component — same
+ * construction as buildCavityHighlightMesh, but on a voxel set eroded
+ * inward from the component's own detected boundary (see SealContext),
+ * and returns null only if every fallback margin leaves nothing (the
+ * void is too thin, relative to the detection resolution, to seal at
+ * all safely).
  *
- * The full-extent seal used before this existed traced the boundary
- * exactly where flood-fill first found empty space — but that boundary is
- * only as accurate as voxelizeSurface's own coarse classification of the
- * exterior shell, which is itself a triangle/box-overlap test at the SAME
- * detection resolution. Near a thin wall (thinner than roughly one
- * detection voxel), that classification can be wrong enough that the
- * cavity's coarse boundary sits at or past where the true (finer) exterior
- * surface actually is — sealing exactly there could then visibly protrude
- * through the printed surface. Eroding first gives up a thin (sub-voxel)
- * sliver of unsealed space at the cavity's true edge in exchange for a
- * patch that's guaranteed to stay inside the solid the coarse grid found —
- * a worthwhile trade, since an invisible, interior under-fill is harmless
- * where a visible surface protrusion isn't.
+ * The full-extent seal used before erosion existed at all traced the
+ * boundary exactly where flood-fill first found empty space — but that
+ * boundary is only as accurate as voxelizeSurface's own coarse
+ * classification of the exterior shell, which is itself a triangle/box-
+ * overlap test at the SAME detection resolution. Near a thin wall
+ * (thinner than roughly one detection voxel), that classification can be
+ * wrong enough that the cavity's coarse boundary sits at or past where
+ * the true (finer) exterior surface actually is — sealing exactly there
+ * could then visibly protrude through the printed surface. Eroding first
+ * gives up a thin (sub-voxel) sliver of unsealed space at the cavity's
+ * true edge in exchange for a patch that's guaranteed to stay inside the
+ * solid the coarse grid found.
+ *
+ * That risk is specifically about proximity to the true exterior, though
+ * — a cavity buried deep inside a structure, nowhere near open air, can't
+ * poke through a surface that isn't anywhere nearby regardless of how it's
+ * sealed. A cavity confirmed at least SAFE_EXTERIOR_DISTANCE_VOXELS from
+ * the exterior skips straight to a full-extent (zero-margin) seal, since
+ * none of the above justifies giving up on it; a cavity that might
+ * actually be close to open air still gets the cautious margin ladder
+ * instead, bottoming out at (but never skipping past) 0 only as a last
+ * resort.
+ *
+ * A tunnel is deliberately kept OUT of that ladder's zero-margin fallback
+ * entirely, unlike a cavity: by definition a tunnel always has at least
+ * one point at or near a real opening to the outside (that's what makes
+ * it a tunnel and not a cavity), so a zero-margin seal there risks
+ * capping that opening shut — not a surface protrusion, but arguably
+ * worse (a channel that was supposed to stay open, doesn't). A skipped
+ * tunnel seal (todays' "too thin" outcome, unchanged here) is a far
+ * safer failure than silently plugging one.
  */
-export function buildSealPatchMesh(grid: VoxelGrid, component: VoidComponent): ComponentHighlightMesh | null {
-  const eroded = erodeVoxelSet(grid, component.voxels, SEAL_EROSION_MARGIN_VOXELS);
-  if (eroded.length === 0) return null;
-  return remeshVoxelSubset(grid, component.id, eroded);
+export function buildSealPatchMesh(grid: VoxelGrid, component: VoidComponent, ctx: SealContext): ComponentHighlightMesh | null {
+  const { solidDist, exteriorDist } = ctx;
+
+  if (component.kind === "tunnel") {
+    const eroded = component.voxels.filter((v) => solidDist[v] > SEAL_EROSION_MARGIN_VOXELS);
+    return eroded.length > 0 ? remeshVoxelSubset(grid, component.id, eroded) : null;
+  }
+
+  let minExteriorDist = Infinity;
+  for (const v of component.voxels) {
+    if (exteriorDist[v] < minExteriorDist) minExteriorDist = exteriorDist[v];
+    if (minExteriorDist < SAFE_EXTERIOR_DISTANCE_VOXELS) break;
+  }
+  const isFarFromExterior = minExteriorDist >= SAFE_EXTERIOR_DISTANCE_VOXELS;
+
+  const margins = isFarFromExterior ? [0] : RISKY_EROSION_MARGINS;
+  for (const margin of margins) {
+    const eroded = component.voxels.filter((v) => solidDist[v] > margin);
+    if (eroded.length > 0) return remeshVoxelSubset(grid, component.id, eroded);
+  }
+  return null;
 }

@@ -58,16 +58,18 @@ describe("parsePDBAtoms", () => {
     expect(atoms.some((a) => a.x === 5 || a.x === 6 || a.x === 7)).toBe(false);
   });
 
-  it("includeHeteroatoms: false drops ions/ligands too, water still always dropped", () => {
+  it("tags each heteroatom with its own residue name, and leaves it unset for a regular ATOM record", () => {
     const text = [
       makeAtomLine({ name: "N", resName: "ALA", x: 1, y: 1, z: 1, element: "N" }),
-      makeAtomLine({ record: "HETATM", name: "O", resName: "HOH", x: 5, y: 5, z: 5, element: "O" }),
       makeAtomLine({ record: "HETATM", name: "ZN", resName: "ZN", x: 20, y: 10, z: 5, element: "ZN" }),
+      makeAtomLine({ record: "HETATM", name: "S", resName: "SO4", x: 8, y: 8, z: 8, element: "S" }),
     ].join("\n");
 
-    const atoms = parsePDBAtoms(text, undefined, { includeHeteroatoms: false });
-    expect(atoms).toHaveLength(1);
-    expect(atoms[0].x).toBe(1);
+    const atoms = parsePDBAtoms(text);
+    expect(atoms).toHaveLength(3);
+    expect(atoms.find((a) => a.x === 1)?.hetResName).toBeUndefined();
+    expect(atoms.find((a) => a.x === 20)?.hetResName).toBe("ZN");
+    expect(atoms.find((a) => a.x === 8)?.hetResName).toBe("SO4");
   });
 
   it("assigns element-specific van der Waals radii from the element column", () => {

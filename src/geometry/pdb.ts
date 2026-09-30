@@ -11,6 +11,17 @@ export interface Atom {
   z: number;
   radius: number;
   chain: string;
+  /** Residue name (e.g. "ZN", "SO4", "NAG") for a HETATM record —
+   * undefined for an ordinary polymer ATOM record, which is never
+   * individually filterable. Lets the UI list distinct ligands/ions
+   * found in a loaded structure and rebuild the surface excluding
+   * specific ones by name, entirely client-side against the atoms
+   * already parsed — see main.ts's ligand/ion filter, which is *why*
+   * this exists (parsing always keeps every non-water heteroatom; the
+   * choice of which to actually build the surface from happens after,
+   * once there's something concrete to choose from — not as a blind
+   * global switch flipped before the user has seen what's in the file). */
+  hetResName?: string;
 }
 
 // Element van-der-Waals radii (Angstroms), covering the elements that
@@ -43,32 +54,19 @@ export const DEFAULT_PROBE_RADIUS = 1.4;
  * same list rather than keeping a second copy that could drift. */
 export const WATER_RESIDUE_NAMES = new Set(["HOH", "WAT", "H2O", "DOD"]);
 
-/** Options shared by both parsePDBAtoms and parseCIFAtoms. */
-export interface ParseAtomsOptions {
-  /** Non-water HETATM/heteroatom records — ions, bound ligands, buffer
-   * or cryoprotectant molecules. Default true (kept), matching this
-   * app's behavior before this option existed. Water is always excluded
-   * regardless of this setting (see WATER_RESIDUE_NAMES) since it never
-   * carries structural/display value; a heteroatom is more of a
-   * judgment call — a bound ligand can be exactly what someone wants
-   * shown — but the same failure mode applies: an ion or small molecule
-   * sitting apart from the main structure (loose in the solvent region,
-   * not actually bound) becomes its own tiny surface fragment,
-   * disconnected from everything else, once voxelized — precisely the
-   * water problem again, just for a different residue type. Surfaced as
-   * a user-facing choice rather than a hardcoded default because,
-   * unlike water, there's no single right answer for every structure. */
-  includeHeteroatoms?: boolean;
-}
-
 /**
  * Parses ATOM/HETATM records from PDB fixed-column text into atom centers,
  * van-der-Waals radii, and chain identifiers — excluding water records
- * (see WATER_RESIDUE_NAMES) and, unless `includeHeteroatoms` is set,
- * every other HETATM record too; residue name is column 18-20. Element
- * comes from columns 77-78 when present (modern PDB files); older files
- * omit it, so this falls back to stripping digits from the atom name
- * (columns 13-16) the way most PDB tooling does. Chain ID is column 22.
+ * unconditionally (see WATER_RESIDUE_NAMES; residue name is column
+ * 18-20), but always keeping every OTHER heteroatom (ions, ligands,
+ * buffer/cryo molecules), tagged with its own residue name via
+ * `hetResName` — which specific ones actually end up in the built
+ * surface is a choice made afterward, client-side, against this same
+ * parsed list (see main.ts's ligand/ion filter and Atom.hetResName's own
+ * doc comment for why). Element comes from columns 77-78 when present
+ * (modern PDB files); older files omit it, so this falls back to
+ * stripping digits from the atom name (columns 13-16) the way most PDB
+ * tooling does. Chain ID is column 22.
  *
  * MODEL records matter for biological-assembly downloads (`{ID}.pdb1`):
  * the chain ID column is a single character, so a symmetry-expanded
@@ -83,8 +81,7 @@ export interface ParseAtomsOptions {
  * apart, but the same suffixing keeps them individually selectable, which
  * is the useful behavior there too.
  */
-export function parsePDBAtoms(pdbText: string, onProgress?: (fraction: number) => void, options: ParseAtomsOptions = {}): Atom[] {
-  const { includeHeteroatoms = true } = options;
+export function parsePDBAtoms(pdbText: string, onProgress?: (fraction: number) => void): Atom[] {
   const atoms: Atom[] = [];
   let modelNumber = 1;
   let modelsSeen = 0;
@@ -104,10 +101,8 @@ export function parsePDBAtoms(pdbText: string, onProgress?: (fraction: number) =
     }
     const isHetatm = line.startsWith("HETATM");
     if (!line.startsWith("ATOM") && !isHetatm) continue;
-    if (isHetatm) {
-      if (WATER_RESIDUE_NAMES.has(line.slice(17, 20).trim().toUpperCase())) continue;
-      if (!includeHeteroatoms) continue;
-    }
+    const resName = isHetatm ? line.slice(17, 20).trim().toUpperCase() : "";
+    if (isHetatm && WATER_RESIDUE_NAMES.has(resName)) continue;
     const x = parseFloat(line.slice(30, 38));
     const y = parseFloat(line.slice(38, 46));
     const z = parseFloat(line.slice(46, 54));
@@ -121,7 +116,7 @@ export function parsePDBAtoms(pdbText: string, onProgress?: (fraction: number) =
     }
     const baseChain = line.slice(21, 22).trim() || "_";
     const chain = modelNumber > 1 ? `${baseChain}-${modelNumber}` : baseChain;
-    atoms.push({ x, y, z, radius: VDW_RADII[element] ?? DEFAULT_RADIUS, chain });
+    atoms.push({ x, y, z, radius: VDW_RADII[element] ?? DEFAULT_RADIUS, chain, hetResName: isHetatm ? resName : undefined });
   }
   return atoms;
 }

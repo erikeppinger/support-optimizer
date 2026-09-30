@@ -1,4 +1,4 @@
-import type { Atom, ParseAtomsOptions } from "./pdb";
+import type { Atom } from "./pdb";
 import { VDW_RADII, DEFAULT_RADIUS, WATER_RESIDUE_NAMES } from "./pdb";
 
 /**
@@ -44,8 +44,7 @@ function tokenizeCifLine(line: string): string[] {
  * viewers actually show) over `label_asym_id` (an internal id that often
  * splits/renumbers the same visual chain) for chain grouping.
  */
-export function parseCIFAtoms(cifText: string, onProgress?: (fraction: number) => void, options: ParseAtomsOptions = {}): Atom[] {
-  const { includeHeteroatoms = true } = options;
+export function parseCIFAtoms(cifText: string, onProgress?: (fraction: number) => void): Atom[] {
   const lines = cifText.split("\n");
   const atoms: Atom[] = [];
   let i = 0;
@@ -106,18 +105,14 @@ export function parseCIFAtoms(cifText: string, onProgress?: (fraction: number) =
         const group = ixGroup >= 0 ? tokens[ixGroup] : "ATOM";
         const resName = ixComp >= 0 ? tokens[ixComp].toUpperCase() : "";
         const isHetatm = group === "HETATM";
-        if (
-          (group === "ATOM" || isHetatm) &&
-          !WATER_RESIDUE_NAMES.has(resName) &&
-          !(isHetatm && !includeHeteroatoms)
-        ) {
+        if ((group === "ATOM" || isHetatm) && !(isHetatm && WATER_RESIDUE_NAMES.has(resName))) {
           const x = parseFloat(tokens[ixX]);
           const y = parseFloat(tokens[ixY]);
           const z = parseFloat(tokens[ixZ]);
           if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) {
             const element = (ixElement >= 0 ? tokens[ixElement] : "C").toUpperCase();
             const chain = ixChain >= 0 ? tokens[ixChain] : "_";
-            atoms.push({ x, y, z, radius: VDW_RADII[element] ?? DEFAULT_RADIUS, chain });
+            atoms.push({ x, y, z, radius: VDW_RADII[element] ?? DEFAULT_RADIUS, chain, hetResName: isHetatm ? resName : undefined });
           }
         }
       }

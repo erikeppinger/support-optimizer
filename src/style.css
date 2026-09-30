@@ -449,7 +449,8 @@ html, body {
   padding: 6px 8px;
 }
 
-#voids-list {
+#voids-list,
+#hetero-filter-list {
   max-height: 280px;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -458,7 +459,8 @@ html, body {
   gap: 2px;
 }
 
-#voids-list:not(:empty) {
+#voids-list:not(:empty),
+#hetero-filter-list:not(:empty) {
   background: rgba(255, 255, 255, 0.05);
   border-radius: 4px;
   padding: 6px 8px;

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import "./style.css";
 import { setupScene, frameObject, scaleBuildPlate } from "./viewer/scene-setup";
-import { scaleAxesGizmo, positionAxesGizmoAtCorner } from "./viewer/axes-gizmo";
+import { createAxesGizmo, disposeAxesGizmo, scaleAxesGizmo, positionAxesGizmoAtCorner } from "./viewer/axes-gizmo";
 import { enableModelDragAndDrop, placeOnBuildPlate, clipPlane, loadSTLFile, buildMeshFromGeometry, COMPARISON_MESH_MATERIAL, MESH_MATERIAL } from "./mesh/load-model";
 import { downloadMeshAsSTL } from "./mesh/export-stl";
 import { downloadMeshAs3MF } from "./mesh/export-3mf";
@@ -12,6 +12,7 @@ import {
   DEFAULT_CRITICAL_ANGLE_DEG,
   SAFE_COLOR_HEX,
   OVERHANG_COLOR_HEX,
+  setOverhangColorMode,
 } from "./geometry/overhang-cost";
 import { evaluateOrientationCost } from "./geometry/orientation-search";
 import type { SupportPathsResult, SupportStyle } from "./geometry/support-paths";
@@ -60,6 +61,13 @@ app.innerHTML = `
         `Restores the geometry exactly as it stood before the last Scale, Optimize, or Fill — one step only, not a full history. Subunit colors and the chain legend are restored too, if that operation had cleared them.`,
       )}
     </div>
+    <div class="void-row">
+      <input type="checkbox" id="colorblind-safe-colors" />
+      <label for="colorblind-safe-colors">Colorblind-safe colors</label>${help(
+        `Applies everywhere color alone carries meaning: the X/Y/Z axis arrows, the needs-support/self-supporting overhang coloring, and the magenta/orange cavity-fill highlight — swapping each pair/triad for one from the Okabe-Ito colorblind-safe palette (the same family the chain-color "Palette" option under Scale &amp; view already offers, just applied everywhere else too).<br><br>
+        Off by default so the app's look doesn't change under anyone who hasn't asked for it — on repaints whatever's currently loaded immediately, no reload needed.`,
+      )}
+    </div>
 
     <details id="section-load" open>
       <summary>1. Load model</summary>
@@ -76,14 +84,6 @@ app.innerHTML = `
         <option value="180">Extreme (180&sup3;) — slow on large structures</option>
         <option value="240">Maximum (240&sup3;) — slow on large structures</option>
       </select>
-      <div class="void-row">
-        <input type="checkbox" id="include-heteroatoms" checked />
-        <label for="include-heteroatoms">Include ions &amp; ligands</label>${help(
-          `Applies to both "Browse for a file…" and "Fetch from RCSB" below, for .pdb/.cif import — a .stl/.3mf import has no atom records to filter.<br><br>
-          Every PDB/mmCIF entry can carry <strong>heteroatoms</strong> alongside the actual protein/nucleic-acid chain: bound ligands, metal ions, and molecules left over from crystallization (buffer salts, cryoprotectants like glycerol or PEG). Water is <strong>always</strong> excluded regardless of this setting — a crystallographic water carries no structural or display value, and a stray one (common in a solvent channel or buried pocket) becomes its own tiny surface fragment, disconnected from the main structure, once voxelized. A slicer then has no way to tell that apart from a real tiny part, and adds support material to hold it up too.<br><br>
-          Other heteroatoms are a genuine judgment call, so this is a choice rather than a hardcoded default: a ligand sitting in a real binding pocket usually overlaps the protein's own surface and merges in fine, but a loose ion or crystallization additive not actually touching the structure hits the exact same disconnected-fragment problem water did. If a print comes out with small floating pieces even after this fix, turn this off and re-import.`,
-        )}
-      </div>
       <input type="file" id="file-input" accept=".stl,.pdb,.3mf,.cif" style="display:none" />
       <button id="browse-btn">Browse for a file…</button>
       <div class="field-label"><label for="fetch-id-input">Fetch from RCSB by ID:</label>${help(
@@ -118,6 +118,15 @@ app.innerHTML = `
           <select id="chain-filter"></select>
           <button id="apply-chain-filter-btn">Apply</button>
         </div>
+      </div>
+      <div id="hetero-filter-row" style="display:none">
+        <div class="field-label">Ligands &amp; ions found:</div>${help(
+          `Every distinct <strong>heteroatom</strong> (ligand, metal ion, or leftover crystallization molecule — buffer salts, cryoprotectants like glycerol or PEG) the loaded file actually contains, all checked in by default. Water is never listed here — it's excluded from every import automatically, no judgment call needed (see Fetch/Browse's own help for why).<br><br>
+          Uncheck anything you don't want in the printed surface, then Apply to rebuild — reusing the atom records already parsed, so it never re-downloads anything, the same as the chain filter above (and composes with it: rebuilding respects whichever chain is currently selected too).<br><br>
+          A ligand genuinely bound in a real pocket usually overlaps the structure's own surface and prints fine either way — this mainly matters for a loose ion or crystallization additive sitting apart from the structure, which becomes its own tiny disconnected fragment once voxelized (a slicer then adds pointless support material trying to hold it up). If a print comes out with small floating pieces, this list is where to find and exclude the culprit.`,
+        )}
+        <div id="hetero-filter-list"></div>
+        <button id="apply-hetero-filter-btn">Apply</button>
       </div>
     </details>
 
@@ -324,7 +333,7 @@ or to whatever surface occludes it first)</span>
       <div id="session-log"></div>
     </details>
   </div>
-  <div id="version-badge">v${__APP_VERSION__}</div>
+  <div id="version-badge">v: ${__APP_VERSION__}</div>
   <div id="help-panel">
     <div id="help-panel-header">
       <span>Help</span>
@@ -377,15 +386,18 @@ const scaleAxisEl = document.querySelector<HTMLSelectElement>("#scale-axis")!;
 const scaleTargetEl = document.querySelector<HTMLInputElement>("#scale-target")!;
 const applyScaleBtnEl = document.querySelector<HTMLButtonElement>("#apply-scale-btn")!;
 const undoBtnEl = document.querySelector<HTMLButtonElement>("#undo-btn")!;
+const colorblindSafeColorsEl = document.querySelector<HTMLInputElement>("#colorblind-safe-colors")!;
 const cancelBtnEl = document.querySelector<HTMLButtonElement>("#cancel-btn")!;
 const fileInputEl = document.querySelector<HTMLInputElement>("#file-input")!;
 const browseBtnEl = document.querySelector<HTMLButtonElement>("#browse-btn")!;
 const importResolutionEl = document.querySelector<HTMLSelectElement>("#import-resolution")!;
-const includeHeteroatomsEl = document.querySelector<HTMLInputElement>("#include-heteroatoms")!;
 const fetchContentSelectEl = document.querySelector<HTMLSelectElement>("#fetch-content-select")!;
 const chainFilterRowEl = document.querySelector<HTMLDivElement>("#chain-filter-row")!;
 const chainFilterEl = document.querySelector<HTMLSelectElement>("#chain-filter")!;
 const applyChainFilterBtnEl = document.querySelector<HTMLButtonElement>("#apply-chain-filter-btn")!;
+const heteroFilterRowEl = document.querySelector<HTMLDivElement>("#hetero-filter-row")!;
+const heteroFilterListEl = document.querySelector<HTMLDivElement>("#hetero-filter-list")!;
+const applyHeteroFilterBtnEl = document.querySelector<HTMLButtonElement>("#apply-hetero-filter-btn")!;
 const fetchIdInputEl = document.querySelector<HTMLInputElement>("#fetch-id-input")!;
 const fetchFormatSelectEl = document.querySelector<HTMLSelectElement>("#fetch-format-select")!;
 const fetchIdBtnEl = document.querySelector<HTMLButtonElement>("#fetch-id-btn")!;
@@ -395,7 +407,13 @@ const chainPaletteSelectEl = document.querySelector<HTMLSelectElement>("#chain-p
 const chainLegendEl = document.querySelector<HTMLDivElement>("#chain-legend")!;
 const export3mfBtnEl = document.querySelector<HTMLButtonElement>("#export-3mf-btn")!;
 
-const { scene, camera, controls, axesGizmo, buildPlate } = setupScene(viewerEl);
+const sceneSetup = setupScene(viewerEl);
+const { scene, camera, controls, buildPlate } = sceneSetup;
+// `let`, not `const`: the "Colorblind-safe colors" toggle rebuilds this
+// with a different color triad (a label's color is baked into its own
+// canvas texture at creation time — see createAxesGizmo — so there's no
+// material property to flip on the existing one).
+let axesGizmo = sceneSetup.axesGizmo;
 
 let currentMesh: THREE.Mesh | null = null;
 let currentBaseName = "model";
@@ -453,9 +471,16 @@ const cavityHighlightMeshes = new Map<number, { mesh: THREE.Mesh; kind: "cavity"
 // Deliberately synthetic/saturated colors, chosen to not be confusable
 // with either the overhang red/blue scheme or the muted qualitative
 // subunit palette — a cavity highlight needs to read as "UI overlay", not
-// blend in as if it were part of the structure's own coloring.
-const CAVITY_INCLUDE_COLOR = 0xff1493;
-const CAVITY_EXCLUDE_COLOR = 0xffa500;
+// blend in as if it were part of the structure's own coloring. `let`, not
+// `const`: the "Colorblind-safe colors" toggle below reassigns both.
+let CAVITY_INCLUDE_COLOR = 0xff1493;
+let CAVITY_EXCLUDE_COLOR = 0xffa500;
+const DEFAULT_CAVITY_INCLUDE_COLOR = 0xff1493;
+const DEFAULT_CAVITY_EXCLUDE_COLOR = 0xffa500;
+// Okabe-Ito bluish-green/orange — same colorblind-safe family used
+// elsewhere in the app whenever the toggle is on.
+const COLORBLIND_CAVITY_INCLUDE_COLOR = 0x009e73;
+const COLORBLIND_CAVITY_EXCLUDE_COLOR = 0xe69f00;
 const HIGHLIGHT_SHELL_OPACITY = 0.25;
 
 // evaluateOrientationCost is O(triangles²) — past this, a single
@@ -770,6 +795,27 @@ function applyChainPalette(id: ChainPaletteId) {
 
 chainPaletteSelectEl.addEventListener("change", () => {
   applyChainPalette(chainPaletteSelectEl.value as ChainPaletteId);
+});
+
+colorblindSafeColorsEl.addEventListener("change", () => {
+  const safe = colorblindSafeColorsEl.checked;
+  setOverhangColorMode(safe);
+  CAVITY_INCLUDE_COLOR = safe ? COLORBLIND_CAVITY_INCLUDE_COLOR : DEFAULT_CAVITY_INCLUDE_COLOR;
+  CAVITY_EXCLUDE_COLOR = safe ? COLORBLIND_CAVITY_EXCLUDE_COLOR : DEFAULT_CAVITY_EXCLUDE_COLOR;
+
+  // The axes gizmo's label color is baked into its own canvas texture at
+  // creation time (see createAxesGizmo) — no material property to flip,
+  // so swap the whole group out for a freshly built one with the other
+  // color triad. refreshVisualization() below reapplies its scale/corner
+  // position, same as it does after any model change.
+  scene.remove(axesGizmo);
+  disposeAxesGizmo(axesGizmo);
+  axesGizmo = createAxesGizmo(safe);
+  scene.add(axesGizmo);
+
+  recolorCurrentMesh();
+  for (const id of cavityHighlightMeshes.keys()) updateCavityHighlightColor(id);
+  refreshVisualization();
 });
 
 function updateSubunitToggleState() {
@@ -1479,6 +1525,7 @@ function loadFile(file: File) {
     if (!lower.endsWith(".pdb") && !lower.endsWith(".cif")) {
       loadedAtoms = null;
       chainFilterRowEl.style.display = "none";
+      heteroFilterRowEl.style.display = "none";
     }
     if (lower.endsWith(".stl")) {
       loadSTLFile(file)
@@ -1574,6 +1621,7 @@ function runVoxelizePdb(request: VoxelizePDBRequest, sourceLabel: string, baseNa
       atomCount = msg.atoms.length;
       loadedAtoms = msg.atoms;
       populateChainFilter(msg.atoms);
+      populateHeteroFilter(msg.atoms);
       setStatus(`Building surface from ${atomCount.toLocaleString()} atoms (grid ${msg.resolution}³)…`);
       return;
     }
@@ -1626,7 +1674,6 @@ function buildSurfaceFromText(text: string, format: "cif" | "pdb", sourceLabel: 
     text,
     format,
     resolution: currentResolutionChoice(),
-    includeHeteroatoms: includeHeteroatomsEl.checked,
   };
   runVoxelizePdb(request, sourceLabel, baseName, "the file", []);
 }
@@ -1653,18 +1700,69 @@ function populateChainFilter(atoms: Atom[]) {
   chainFilterRowEl.style.display = chains.length > 1 ? "block" : "none";
 }
 
-applyChainFilterBtnEl.addEventListener("click", () => {
+/** Fills the ligand/ion checklist from whatever non-water heteroatoms the
+ * loaded atom records actually contain, grouped by residue name — all
+ * checked in by default, matching what the initial load already built
+ * (every non-water heteroatom included; see Atom.hetResName). Hidden
+ * entirely when the structure has none, same as the chain filter is for
+ * a single-chain structure. */
+function populateHeteroFilter(atoms: Atom[]) {
+  const counts = new Map<string, number>();
+  for (const a of atoms) {
+    if (!a.hetResName) continue;
+    counts.set(a.hetResName, (counts.get(a.hetResName) ?? 0) + 1);
+  }
+  const resNames = [...counts.keys()].sort();
+
+  heteroFilterListEl.innerHTML = "";
+  for (const name of resNames) {
+    const row = document.createElement("label");
+    row.className = "void-row";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = true;
+    checkbox.dataset.resname = name;
+    row.appendChild(checkbox);
+    const count = counts.get(name)!;
+    row.append(` ${name} — ${count.toLocaleString()} atom${count === 1 ? "" : "s"}`);
+    heteroFilterListEl.appendChild(row);
+  }
+  heteroFilterRowEl.style.display = resNames.length > 0 ? "block" : "none";
+}
+
+/** Rebuilds the surface from `loadedAtoms`, filtered by BOTH the chain
+ * filter's current selection and the ligand/ion checklist's current
+ * check state together — shared by both Apply buttons so clicking either
+ * one always respects the other control's current setting too, not just
+ * its own. */
+function applyAtomFilters() {
   if (!loadedAtoms || worker) return;
   const chain = chainFilterEl.value;
-  const subset = chain ? loadedAtoms.filter((a) => a.chain === chain) : loadedAtoms;
+  const excludedResNames = new Set(
+    [...heteroFilterListEl.querySelectorAll<HTMLInputElement>("input[type=checkbox]")]
+      .filter((cb) => !cb.checked)
+      .map((cb) => cb.dataset.resname!),
+  );
+
+  const subset = loadedAtoms.filter((a) => {
+    if (chain && a.chain !== chain) return false;
+    if (a.hetResName && excludedResNames.has(a.hetResName)) return false;
+    return true;
+  });
   if (subset.length === 0) {
-    setStatus(`Chain ${chain} has no atoms to build from.`, true);
+    setStatus("No atoms left to build from with the current chain/ligand selection.", true);
     return;
   }
-  const label = chain ? `${loadedAtomsSourceLabel} (chain ${chain})` : loadedAtomsSourceLabel;
+
+  const chainNote = chain ? ` (chain ${chain})` : "";
+  const heteroNote = excludedResNames.size > 0 ? ` excl. ${[...excludedResNames].sort().join(", ")}` : "";
+  const label = `${loadedAtomsSourceLabel}${chainNote}${heteroNote}`;
   const baseName = chain ? `${loadedAtomsBaseName}-chain${chain}` : loadedAtomsBaseName;
   buildSurfaceFromAtoms(subset, label, baseName);
-});
+}
+
+applyChainFilterBtnEl.addEventListener("click", applyAtomFilters);
+applyHeteroFilterBtnEl.addEventListener("click", applyAtomFilters);
 
 enableModelDragAndDrop(
   viewerEl,

@@ -41,13 +41,55 @@ function parseHexColor(hex: string | null): [number, number, number] | null {
 }
 
 /**
+ * PrusaSlicer's per-triangle multi-material-paint code table (identical for
+ * Bambu Studio/OrcaSlicer, which write the same codes under a `paint_color`
+ * attribute instead of `slic3rpe:mmu_segmentation`) — this is how a slicer's
+ * OWN paint-on-supports/paint-on-color tool records a triangle's assigned
+ * extruder, and it's what ChimeraX's 3MF exporter uses too (see the sibling
+ * chimerax-3mf project) since it's the one per-triangle coloring mechanism
+ * both PrusaSlicer and Bambu/Orca actually read back on import — unlike the
+ * standards-compliant <m:colorgroup>/<basematerials> pid/p1 mechanism above,
+ * which those slicers write but silently ignore when reading.
+ *
+ * Table and index offset (extruder N is MMU_CODES[N], index 0 = unpainted)
+ * verified empirically by slicing known-volume test models — see
+ * chimerax-3mf's CLAUDE.md ("the published MMU encoding tables are off by
+ * one"). Only recognizes an EXACT, unsplit leaf code from this table; a
+ * human paint job in the slicer itself can subdivide a triangle into a
+ * quadtree of differently-colored sub-regions, serialized as a longer,
+ * structurally different string this table can't represent — such a code
+ * simply won't match here and that triangle falls through to whatever color
+ * source comes next, rather than risk decoding it wrong.
+ */
+const MMU_SEGMENTATION_CODES = [
+  "0", "4", "8", "0C", "1C", "2C", "3C", "4C",
+  "5C", "6C", "7C", "8C", "9C", "AC", "BC", "CC",
+];
+
+function mmuSegmentationColor(
+  code: string | null,
+  palette: Array<[number, number, number] | null> | null,
+): [number, number, number] | null {
+  if (!code || !palette) return null;
+  const idx = MMU_SEGMENTATION_CODES.indexOf(code.toUpperCase());
+  if (idx <= 0) return null; // 0 = unpainted; -1 = not a recognized unsplit leaf code
+  return palette[idx - 1] ?? null;
+}
+
+/**
  * Parses a 3MF file (a ZIP containing 3D/3dmodel.model XML, per the Core
  * and Materials & Properties specs) into a flat, non-indexed triangle soup
  * with per-vertex color. Supports both <basematerials> (name+displaycolor)
  * and the <m:colorgroup> color extension for per-triangle/per-object
  * coloring, <components> (objects built from other objects) recursively,
- * and <build><item transform="..."> placement. Objects/triangles with no
- * resolvable color fall back to a neutral gray rather than failing.
+ * and <build><item transform="..."> placement. Falls back to each
+ * triangle's slic3rpe:mmu_segmentation/paint_color code (see
+ * mmuSegmentationColor) when no pid/p1 color is present — many real-world
+ * 3MF writers (ChimeraX's own exporter included) paint color exclusively
+ * through that per-triangle slicer-paint mechanism, since PrusaSlicer and
+ * Bambu/Orca read it back but ignore <m:colorgroup>/<basematerials> on
+ * import despite writing them too. Objects/triangles with no resolvable
+ * color fall back to a neutral gray rather than failing.
  */
 export function parse3MF(buffer: ArrayBuffer): Parsed3MF {
   const files = unzipSync(new Uint8Array(buffer));
@@ -86,6 +128,16 @@ export function parse3MF(buffer: ArrayBuffer): Parsed3MF {
       entries.push(parseHexColor(hex));
     }
     colorGroups.set(id, entries);
+  }
+
+  // The palette MMU-segmentation codes index into (region N -> this
+  // palette's entry N) — picks the largest color group found, since the
+  // relevant one needs at least as many entries as the highest painted
+  // region index, and a file with exactly one real palette (the normal
+  // case) just has one candidate anyway.
+  let mmuPalette: Array<[number, number, number] | null> | null = null;
+  for (const group of colorGroups.values()) {
+    if (!mmuPalette || group.length > mmuPalette.length) mmuPalette = group;
   }
 
   function colorFor(pid: string | null, pIndex: string | null): [number, number, number] | null {
@@ -139,7 +191,9 @@ export function parse3MF(buffer: ArrayBuffer): Parsed3MF {
 
         const triPid = tri.getAttribute("pid") ?? objectPid;
         const triP1 = tri.getAttribute("p1") ?? objectPIndex;
-        const triColor = colorFor(triPid, triP1) ?? objectColor ?? FALLBACK_COLOR;
+        const mmuCode = tri.getAttribute("slic3rpe:mmu_segmentation") ?? tri.getAttribute("paint_color");
+        const triColor =
+          colorFor(triPid, triP1) ?? mmuSegmentationColor(mmuCode, mmuPalette) ?? objectColor ?? FALLBACK_COLOR;
         emitTriangle(v0, v1, v2, triColor);
       }
     }
