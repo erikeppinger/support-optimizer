@@ -58,7 +58,7 @@ app.innerHTML = `
     <button id="cancel-btn" style="display:none">Cancel</button>
     <div class="input-row" id="undo-row">
       <button id="undo-btn" disabled>Undo last change</button>${help(
-        `Restores the geometry exactly as it stood before the last Scale, Optimize, or Fill — one step only, not a full history. Subunit colors and the chain legend are restored too, if that operation had cleared them.`,
+        `Restores the geometry exactly as it stood before the last Scale, Optimize, or Fill — one step only, not a full history. Subunit colors and the chain legend are restored too, if that operation had changed them.`,
       )}
     </div>
     <div class="void-row">
@@ -122,7 +122,7 @@ app.innerHTML = `
       </div>
       <div id="hetero-filter-row" style="display:none">
         <div class="field-label">Ligands &amp; ions found:</div>${help(
-          `Every distinct <strong>heteroatom</strong> (ligand, metal ion, or leftover crystallization molecule — buffer salts, cryoprotectants like glycerol or PEG) the loaded file actually contains, all checked in by default. Water is never listed here — it's excluded from every import automatically, no judgment call needed (see Fetch/Browse's own help for why).<br><br>
+          `Every distinct <strong>heteroatom</strong> (ligand, metal ion, or leftover crystallization molecule — buffer salts, cryoprotectants like glycerol or PEG) the loaded file actually contains, all checked in by default. Water is never listed here — it's always excluded, because each crystallographic water molecule would otherwise become its own separate speck in the print.<br><br>
           Uncheck anything you don't want in the printed surface, then Apply to rebuild — reusing the atom records already parsed, so it never re-downloads anything, the same as the chain filter above (and composes with it: rebuilding respects whichever chain is currently selected too).<br><br>
           A ligand genuinely bound in a real pocket usually overlaps the structure's own surface and prints fine either way — this mainly matters for a loose ion or crystallization additive sitting apart from the structure, which becomes its own tiny disconnected fragment once voxelized (a slicer then adds pointless support material trying to hold it up). If a print comes out with small floating pieces, this list is where to find and exclude the culprit.`,
         )}
@@ -217,7 +217,7 @@ app.innerHTML = `
         </div>
         <button id="detect-cavities-btn" disabled>Find cavities</button>${help(
           `Voxelizes the surface, then flood-fills 6-connected empty space starting from a guaranteed-exterior corner voxel. A <strong>cavity</strong> is empty voxels the flood-fill never reaches — fully enclosed, including a pocket trapped between two touching subunits with no path out (a real print concern: any support material generated inside one is stuck there permanently once printed).<br><br>
-          Detect Cavities and Detect Tunnels run the identical underlying scan (both kinds come from the same flood-fill) and refresh both lists — separated here only so each has its own review/select/fill workflow.`,
+          Find cavities and Find tunnels each run their own scan and only update their own list — finding tunnels never resets your cavity selection, and vice versa.`,
         )}
         <div class="void-row">
           <input type="checkbox" id="show-void-highlights" checked />
@@ -229,19 +229,20 @@ app.innerHTML = `
         <div id="cavities-list"></div>
         <button id="apply-fill-cavities-btn" disabled>Fill selected cavities</button>${help(
           `Adds a small sealing mesh for each selected cavity directly onto the existing exterior geometry. The exterior is <strong>never</strong> re-voxelized or touched — concatenating the two is already a valid union, no boolean/CSG merge needed, and the visible surface stays byte-identical.<br><br>
-          Unlike the on-model highlight (which shows the void's <em>full</em> detected extent, for visibility/picking), the seal itself is built from that extent eroded 1 detection voxel inward. The highlight boundary is only as accurate as the detection grid's own coarse classification of the exterior shell — right at a thin wall, that classification can be off by about a voxel, so sealing exactly at the detected boundary could poke through the real surface. Eroding first trades a thin, invisible, interior sliver of under-fill for a patch guaranteed to stay inside the solid. A void too thin to survive that erosion is skipped rather than risk a protrusion — try a higher detection resolution to seal it.`,
+          Unlike the on-model highlight (which shows the void's <em>full</em> detected extent), the seal is pulled back from the void's edge by a safety margin: right at a thin wall, the detection grid's idea of where the outside begins can be off by about a voxel, and a seal built exactly to that boundary could poke through the real surface.<br><br>
+          How much margin depends on where the cavity sits. One buried at least 2 voxels from the outside is sealed to its full extent — a seal there can't reach the surface. One that may lie close to the outside gets the largest margin that still leaves something to seal (1 voxel, then ¾, ½, ¼, and finally none). In practice every selected cavity gets sealed.`,
         )}
       </div>
       <div class="void-group">
         <div class="void-group-title">Tunnels <span class="void-group-sub">— open channels, but may still be worth sealing</span></div>
         <button id="detect-tunnels-btn" disabled>Find tunnels</button>${help(
           `A <strong>tunnel</strong> is empty voxels the flood-fill <em>does</em> reach, but that still sit within the model's own bounds (not the padding margin) — an open channel through the part, most often along the seam where two subunits meet without ever fully closing off.<br><br>
-          Unlike a cavity, a tunnel's own boundary can border genuinely exterior space at its opening — but the same 1-voxel erosion Fill uses for cavities naturally shrinks away from that opening too (a voxel right at the mouth always has a neighbor outside the tunnel's own voxel set), so sealing one is exactly as safe. What's different is intent: filling a tunnel removes an open channel entirely, which is a bigger geometric change than sealing a buried pocket — worth reviewing each one before filling, which is why none are pre-selected.<br><br>
-          Detect Cavities and Detect Tunnels run the identical underlying scan and refresh both lists — separated here only so each has its own review/select/fill workflow.`,
+          A tunnel's boundary borders genuinely exterior space at its opening, so its seal always keeps the full 1-voxel margin — that pulls the seal back from the opening instead of closing it over. What's different from a cavity is also intent: filling a tunnel removes an open channel entirely, a bigger geometric change than sealing a buried pocket, which is why none are pre-selected.<br><br>
+          Find tunnels only updates the tunnel list — your cavity list and its selection stay as they are.`,
         )}
         <div id="tunnels-list"></div>
         <button id="apply-fill-tunnels-btn" disabled>Fill selected tunnels</button>${help(
-          `Identical construction to Fill selected cavities (same eroded seal, same byte-identical-exterior guarantee) — the only difference is which list of ids it acts on. Nothing is pre-selected for tunnels; check the ones you want sealed in the list above first.`,
+          `Builds seals the same way as Fill selected cavities, with the exterior left byte-identical — except that a tunnel always keeps the full 1-voxel margin, never less. A tunnel thinner than about 3 detection voxels has nothing left after that margin and is skipped; raise the detection resolution and find tunnels again to seal it. Nothing is pre-selected; check the ones you want sealed first.`,
         )}
       </div>
     </details>
@@ -271,7 +272,7 @@ app.innerHTML = `
         <option value="48">Fine proxy (48&sup3;)</option>
       </select>
       <button id="optimize-btn" disabled>Optimize orientation</button>${help(
-        `Samples ~32 points on a Fibonacci sphere plus the 6 axis-aligned directions (mechanical/molecular parts often have their true optimum exactly on one — sphere sampling alone can miss a narrow basin), scores each, refines a small grid around the best few, and picks the winner.<br>
+        `Samples ~32 points on a Fibonacci sphere plus the 6 axis-aligned directions (mechanical/molecular parts often have their true optimum exactly on one — sphere sampling alone can miss a narrow basin), scores each, refines a small grid around the best few, and picks the winner. The sphere sample is randomly rotated on every run, so the result doesn't depend on how the structure happens to be oriented in its file; the 6 axis directions stay fixed.<br>
         <span class="formula">cost = &Sigma; over overhang triangles of
 area &times; (drop height to the plate,
 or to whatever surface occludes it first)</span>

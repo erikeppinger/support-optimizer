@@ -63,11 +63,10 @@ jobs:
           # Update this before tagging each release — see the assets
           # below to download and install for your platform.
           releaseBody: |
-            - New: colorblind-safe color toggle. It switches the chain colors to the Tol Muted palette (and back), and the axis gizmo, overhang shading and cavity-highlight colors to Okabe–Ito colors. Structures loaded while it's on start with the safe palette. A chain palette you picked yourself is kept; colors from an imported 3MF stay the file's own.
-            - Fixed: a 3MF file that carries color only as slicer paint data (PrusaSlicer's `slic3rpe:mmu_segmentation` / Bambu-Orca's `paint_color` — e.g. files exported by ChimeraX's own 3MF exporter) imported as one flat gray color instead of its original per-part colors
-            - Reworked ion/ligand handling: instead of one global "include ions & ligands" toggle, loading a PDB/mmCIF now shows a checklist of the heteroatoms actually present in that file, so you choose which ones to keep before the surface is built
-            - Fixed: cavity sealing was skipping the large majority of detected voids as "too thin to seal," and got worse (not better) at higher resolution — sealing now erodes by a margin based on how far a cavity actually sits from the model's exterior, instead of one fixed margin for every cavity regardless of depth
-            - The version badge now reads "v: 1.x.y" in the lower-right corner
+            - Fixed: several in-app help ("?") texts still described how the app worked before v1.0.6. Fill cavities and Fill tunnels now explain the current sealing margins (a buried cavity is sealed in full, a tunnel always keeps a 1-voxel margin so its opening is never closed over), and Find cavities / Find tunnels no longer claim that each button refreshes both lists.
+            - The Optimize orientation help now mentions that the search is randomly rotated on every run, so the result doesn't depend on how the structure is oriented in its file
+            - Smaller help-text corrections for Undo and "Ligands & ions found"
+            - The README now links to these installers, explains how releases are published, and describes water/ligand handling, 3MF colors and the colorblind toggle
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
