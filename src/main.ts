@@ -64,8 +64,9 @@ app.innerHTML = `
     <div class="void-row">
       <input type="checkbox" id="colorblind-safe-colors" />
       <label for="colorblind-safe-colors">Colorblind-safe colors</label>${help(
-        `Applies everywhere color alone carries meaning: the X/Y/Z axis arrows, the needs-support/self-supporting overhang coloring, and the magenta/orange cavity-fill highlight — swapping each pair/triad for one from the Okabe-Ito colorblind-safe palette (the same family the chain-color "Palette" option under Scale &amp; view already offers, just applied everywhere else too).<br><br>
-        Off by default so the app's look doesn't change under anyone who hasn't asked for it — on repaints whatever's currently loaded immediately, no reload needed.`,
+        `Applies everywhere color alone carries meaning: the per-chain colors (switched to the Tol Muted palette), the X/Y/Z axis arrows, the needs-support/self-supporting overhang coloring, and the cavity-fill highlight (Okabe–Ito colors).<br><br>
+        A chain palette you picked yourself under Scale &amp; view is kept. Colors that came from an imported 3MF file are the file's own and stay as they are — only their overhang flag changes.<br><br>
+        Repaints whatever's currently loaded immediately, and applies to anything loaded while it's on.`,
       )}
     </div>
 
@@ -521,6 +522,9 @@ let chainLegend: ChainMeshEntry[] | null = null;
  * import's colors are whatever that file's own materials specified). */
 let subunitChainIndex: Int32Array | null = null;
 let chainPaletteId: ChainPaletteId = "default";
+// Tol Muted rather than Okabe–Ito: Okabe–Ito's vermillion is also the
+// colorblind overhang flag, so a 6th chain would be indistinguishable from it.
+const COLORBLIND_CHAIN_PALETTE: ChainPaletteId = "tol-muted";
 
 // Single-level undo: the geometry as it stood immediately before the last
 // Scale/Optimize/Fill, so a bad result doesn't force re-dropping the
@@ -812,6 +816,16 @@ colorblindSafeColorsEl.addEventListener("change", () => {
   disposeAxesGizmo(axesGizmo);
   axesGizmo = createAxesGizmo(safe);
   scene.add(axesGizmo);
+
+  // Chain colors are most of what's on screen for a multi-chain structure.
+  // Only swap between default and the colorblind palette — a palette the
+  // user picked by hand (Tol Muted, Viridis) is left alone either way.
+  const nextPalette = safe ? COLORBLIND_CHAIN_PALETTE : "default";
+  const prevPalette = safe ? "default" : COLORBLIND_CHAIN_PALETTE;
+  if (chainPaletteId === prevPalette) {
+    chainPaletteSelectEl.value = nextPalette;
+    applyChainPalette(nextPalette);
+  }
 
   recolorCurrentMesh();
   for (const id of cavityHighlightMeshes.keys()) updateCavityHighlightColor(id);
@@ -1471,9 +1485,12 @@ function handleLoadedMesh(mesh: THREE.Mesh, baseName: string, statusMessage: str
 
   subunitColor = subunitData?.color ?? null;
   chainLegend = subunitData?.chains ?? null;
-  chainPaletteId = "default";
-  chainPaletteSelectEl.value = "default";
   subunitChainIndex = chainLegend ? buildSubunitChainIndex(chainLegend, mesh.geometry.attributes.position.count) : null;
+  const startPalette: ChainPaletteId = colorblindSafeColorsEl.checked ? COLORBLIND_CHAIN_PALETTE : "default";
+  chainPaletteSelectEl.value = startPalette;
+  // The worker always colors chains with the default palette, so a load
+  // while colorblind mode is on has to be re-colored before it's baked in.
+  applyChainPalette(startPalette);
   showSubunitColorsEl.checked = !!subunitData?.defaultOn;
   updateSubunitToggleState();
   // Bake the initial subunit coloring into the geometry BEFORE cloning it
