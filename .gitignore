@@ -35,3 +35,6 @@ support-optimizer-app/
 scratch/
 scripts/
 test/
+
+# Personal lab notes, not published
+docs/LAB_NOTES.*
