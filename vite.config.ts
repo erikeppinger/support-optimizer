@@ -15,6 +15,9 @@ const pkg = JSON.parse(readFileSync(fileURLToPath(new URL("./package.json", impo
 // the app itself. public/ is left watched normally since Vite serves it
 // directly from disk per-request.
 export default defineConfig({
+  // Relative asset paths, so the same build works at a domain root (Tauri)
+  // and under GitHub Pages' /support-optimizer/ sub-path.
+  base: "./",
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },

@@ -15,6 +15,8 @@ Everything runs client-side in the browser (Web Workers do the heavy geometry wo
 
 ## Quickest way to just try it
 
+**In your browser:** open **https://erikeppinger.github.io/support-optimizer/** — nothing to install. Files you load are processed in your own browser and never uploaded.
+
 **Desktop installers** for Windows, macOS (Apple Silicon and Intel) and Linux are attached to each release on the [Releases page](https://github.com/erikeppinger/support-optimizer/releases) — download the one for your platform and install it like any other app. Nothing else is needed.
 
 **Without installing anything:** if someone already has it running with `npm run dev` or `npm run preview`, they can just send you the URL it prints (e.g. `http://localhost:5173`) — if you're on the same network, open that in your own browser and it works immediately, no setup on your end at all.
@@ -62,7 +64,9 @@ Either way, this is a one-line command with no dependency installation beyond wh
 
 ## Option C — Host it somewhere, share a link
 
-If you want the absolute lowest friction for a colleague (they just open a URL, nothing runs on their machine at all), drop the same `dist/` folder from Option B onto any static hosting service — e.g. [Netlify Drop](https://app.netlify.com/drop) (drag the folder into the browser, get a URL back, no account required) or GitHub Pages if the project lives in a GitHub repo. Not set up as part of this project by default — mentioned here as the option to reach for if repeated file-sharing gets old.
+If you want the absolute lowest friction for a colleague (they just open a URL, nothing runs on their machine at all), drop the same `dist/` folder from Option B onto any static hosting service — e.g. [Netlify Drop](https://app.netlify.com/drop) (drag the folder into the browser, get a URL back, no account required).
+
+This repository already does this with GitHub Pages: `.github/workflows/pages.yml` builds and publishes the browser version to https://erikeppinger.github.io/support-optimizer/ on every push to `main` (tests must pass first). It needs **Settings → Pages → Source: GitHub Actions** set once. The build uses relative asset paths (`base: "./"` in `vite.config.ts`), so the same `dist/` works at a domain root, under a sub-path like Pages', and inside the desktop app.
 
 ## Option D — Native desktop app (Tauri)
 
