@@ -40,6 +40,10 @@ jobs:
       - name: Build
         run: npm run build
 
+      # The in-app About dialog links here.
+      - name: Add the manual
+        run: cp docs/MANUAL.html dist/manual.html
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

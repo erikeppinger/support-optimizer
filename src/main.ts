@@ -31,6 +31,7 @@ import type {
   WorkerResponse,
 } from "./workers/geometry-worker";
 import GeometryWorker from "./workers/geometry-worker?worker";
+import { cornerBarHtml, setupAboutDialog } from "./about-dialog";
 
 /** A small "?" button next to a control. Content is meant to actually
  * explain the computation (formula/algorithm), not just restate the
@@ -335,7 +336,7 @@ or to whatever surface occludes it first)</span>
       <div id="session-log"></div>
     </details>
   </div>
-  <div id="version-badge">v: ${__APP_VERSION__}</div>
+  ${cornerBarHtml(__APP_VERSION__)}
   <div id="help-panel">
     <div id="help-panel-header">
       <span>Help</span>
@@ -345,6 +346,7 @@ or to whatever surface occludes it first)</span>
   </div>
   <div id="status"></div>
 `;
+setupAboutDialog(__APP_VERSION__);
 
 const controlsPanelEl = document.querySelector<HTMLDivElement>("#controls-panel")!;
 const viewerEl = document.querySelector<HTMLDivElement>("#viewer")!;

@@ -63,10 +63,7 @@ jobs:
           # Update this before tagging each release — see the assets
           # below to download and install for your platform.
           releaseBody: |
-            - Fixed: several in-app help ("?") texts still described how the app worked before v1.0.6. Fill cavities and Fill tunnels now explain the current sealing margins (a buried cavity is sealed in full, a tunnel always keeps a 1-voxel margin so its opening is never closed over), and Find cavities / Find tunnels no longer claim that each button refreshes both lists.
-            - The Optimize orientation help now mentions that the search is randomly rotated on every run, so the result doesn't depend on how the structure is oriented in its file
-            - Smaller help-text corrections for Undo and "Ligands & ions found"
-            - The README now links to these installers, explains how releases are published, and describes water/ligand handling, 3MF colors and the colorblind toggle
+            - This welcome dialog, with a quick start and links to the manual, the desktop downloads and the source code. Reopen it any time from the ⓘ button in the lower-right corner.
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}

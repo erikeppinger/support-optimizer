@@ -8,6 +8,13 @@
   "permissions": [
     "core:default",
     "dialog:allow-save",
-    "fs:allow-write-file"
+    "fs:allow-write-file",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        { "url": "https://github.com/erikeppinger/support-optimizer*" },
+        { "url": "https://erikeppinger.github.io/support-optimizer/*" }
+      ]
+    }
   ]
 }

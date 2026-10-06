@@ -94,7 +94,7 @@ Worth knowing about what's already configured:
 `.github/workflows/release.yml` builds installers for Windows, macOS (Apple Silicon and Intel) and Linux on GitHub Actions and attaches them to a **draft** release — nothing is public until you click Publish on the Releases page.
 
 1. Bump the version in `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `src-tauri/Cargo.lock` (all four must match — the release is named after it).
-2. Replace `releaseBody` in `release.yml` with this release's notes. It is not generated automatically.
+2. Add the release's notes as a new top entry in `src/whats-new.ts` (shown in the app's welcome dialog), and copy the same items into `releaseBody` in `release.yml`. Neither is generated automatically.
 3. Commit and push `main`, then push a tag: `git tag v1.2.3 && git push origin v1.2.3`.
 4. When all four builds finish (about 7 minutes), review the draft on the Releases page and publish it.
 

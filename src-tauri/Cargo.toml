@@ -1,6 +1,6 @@
 [package]
 name = "support-optimizer"
-version = "1.0.8"
+version = "1.0.9"
 description = "Molecular structure prep for 3D printing: surface generation, cavity sealing, and print-orientation optimization, running client-side in a webview."
 authors = []
 license = ""
@@ -25,3 +25,4 @@ tauri = { version = "2.11.3", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
+tauri-plugin-opener = "2"

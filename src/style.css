@@ -76,15 +76,179 @@ html, body {
   color: #ff8080;
 }
 
-#version-badge {
+#corner-bar {
   position: absolute;
   right: 12px;
-  bottom: 12px;
+  bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.corner-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  color: #9aa3b5;
+  cursor: pointer;
+}
+
+.corner-icon:hover,
+.corner-icon:focus-visible {
+  background: #3a5bdc;
+  color: #fff;
+  outline: none;
+}
+
+#version-badge {
   color: #666;
   font-size: 0.72rem;
   font-family: ui-monospace, "SF Mono", Consolas, monospace;
-  pointer-events: none;
   user-select: none;
+}
+
+/* Same panel look as #help-panel, centered as a modal. */
+#about-dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-height: min(85vh, 760px);
+  padding: 0;
+  overflow: hidden;
+  display: none;
+  flex-direction: column;
+  background: rgba(20, 24, 34, 0.97);
+  color: #ccc;
+  border: 1px solid rgba(120, 160, 255, 0.35);
+  border-top: 3px solid #3a5bdc;
+  border-radius: 6px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+#about-dialog[open] {
+  display: flex;
+}
+
+#about-dialog::backdrop {
+  background: rgba(5, 8, 15, 0.55);
+}
+
+.about-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.about-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #eee;
+}
+
+.about-version {
+  margin-left: 6px;
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: #888;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+}
+
+.about-close {
+  background: none;
+  border: none;
+  color: #999;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.about-close:hover,
+.about-close:focus-visible {
+  color: #fff;
+  outline: none;
+}
+
+.about-body {
+  padding: 4px 18px 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.about-body h3 {
+  margin: 18px 0 6px;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9ecbff;
+}
+
+.about-body p {
+  margin: 10px 0;
+}
+
+.about-body ol,
+.about-body ul {
+  margin: 6px 0;
+  padding-left: 20px;
+}
+
+.about-body li {
+  margin-bottom: 5px;
+}
+
+.about-news ul {
+  padding-left: 16px;
+  margin-top: 2px;
+}
+
+.about-body a {
+  color: #9ecbff;
+}
+
+.about-body code {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 0.8rem;
+  color: #9ecbff;
+}
+
+.about-note {
+  color: #aab4c8;
+  border-left: 2px solid #3a5bdc;
+  padding-left: 10px;
+}
+
+.about-q {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #4a5568;
+  color: #ddd;
+  font-size: 10px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.about-links {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.about-fine {
+  color: #888;
+  font-size: 0.76rem;
 }
 
 #controls-panel {
