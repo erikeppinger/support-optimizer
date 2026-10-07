@@ -32,6 +32,7 @@ import type {
 } from "./workers/geometry-worker";
 import GeometryWorker from "./workers/geometry-worker?worker";
 import { cornerBarHtml, setupAboutDialog } from "./about-dialog";
+import { etaTracker } from "./progress-eta";
 
 /** A small "?" button next to a control. Content is meant to actually
  * explain the computation (formula/algorithm), not just restate the
@@ -255,7 +256,8 @@ app.innerHTML = `
         <span class="formula">lean° = asin(clamp(&minus;normalZ, &minus;1, 1)) &times; 180/&pi;</span>
         0&deg; = a vertical wall (self-supporting). 90&deg; = a flat, downward-facing overhang (worst case).<br><br>
         This is the single parameter everything in this section is measured against: it defines the cost formula Optimize minimizes, which faces the organic support paths grow from, and the maximum lean those support branches themselves may have. It also drives the red/blue overhang coloring in the viewport — so changing it does repaint the model, even though it never alters the geometry.<br><br>
-        Set it to match your printer and material: most FDM machines manage about 45&deg;, resin printers often more.`,
+        Set it to match your printer and material: most FDM machines manage about 45&deg;, resin printers often more.<br><br>
+        <strong>Lower angles take longer to compute.</strong> Every face past the angle has to be traced down to whatever is below it, so Optimize and the support-path preview slow down as more faces count as overhangs — on a test sphere, 30&deg; took about twice as long as 45&deg;, and 15&deg; about three times as long.`,
       )}</div>
       <input type="range" id="critical-angle" min="0" max="90" step="1" value="${DEFAULT_CRITICAL_ANGLE_DEG}" />
       <div id="overhang-legend" class="void-row-readonly"></div>
@@ -1627,11 +1629,13 @@ function runVoxelizePdb(request: VoxelizePDBRequest, sourceLabel: string, baseNa
 
   let atomCount = request.atoms?.length ?? 0;
 
+  // The first 15% is file parsing, which runs faster than the surface build.
+  const eta = etaTracker(0.15);
   worker = new GeometryWorker();
   worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
     const msg = e.data;
     if (msg.type === "progress") {
-      setStatus(`Building surface from ${atomCount ? atomCount.toLocaleString() + " atoms" : atomCountHint}… ${Math.round(msg.fraction * 100)}%`);
+      setStatus(`Building surface from ${atomCount ? atomCount.toLocaleString() + " atoms" : atomCountHint}… ${Math.round(msg.fraction * 100)}%${eta(msg.fraction)}`);
       return;
     }
     if (msg.type === "atoms-parsed") {
@@ -1882,11 +1886,13 @@ optimizeBtnEl.addEventListener("click", () => {
   setBusy(true);
   setStatus(proxyResolution ? `Building proxy at ${proxyResolution}³…` : "Searching orientations…");
 
+  // With the proxy, the first 20% is building it, not searching.
+  const eta = etaTracker(proxyResolution ? 0.2 : 0.1);
   worker = new GeometryWorker();
   worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
     const msg = e.data;
     if (msg.type === "progress") {
-      setStatus(`Searching orientations… ${Math.round(msg.fraction * 100)}%`);
+      setStatus(`Searching orientations… ${Math.round(msg.fraction * 100)}%${eta(msg.fraction)}`);
       return;
     }
     if (msg.type !== "orientation-result") return;
@@ -1950,11 +1956,12 @@ function runDetectVoids(triggeredBy: "cavity" | "tunnel") {
   clearCavityHighlights(triggeredBy);
   setStatus(`Voxelizing at ${resolution}³…`);
 
+  const eta = etaTracker();
   worker = new GeometryWorker();
   worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
     const msg = e.data;
     if (msg.type === "progress") {
-      setStatus(`Detecting ${pluralVoidWord(triggeredBy, 2)}… ${Math.round(msg.fraction * 100)}%`);
+      setStatus(`Detecting ${pluralVoidWord(triggeredBy, 2)}… ${Math.round(msg.fraction * 100)}%${eta(msg.fraction)}`);
       return;
     }
     if (msg.type !== "voids-detected") return;
@@ -2080,11 +2087,12 @@ function runFill(kind: "cavity" | "tunnel", selectedIds: Set<number>) {
       : `Filling ${idsToFill.length} selected ${pluralVoidWord(kind, idsToFill.length)}… before cost ${beforeCost.toFixed(1)}`,
   );
 
+  const eta = etaTracker();
   worker = new GeometryWorker();
   worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
     const msg = e.data;
     if (msg.type === "progress") {
-      setStatus(`Filling selected ${pluralVoidWord(kind, 2)}… ${Math.round(msg.fraction * 100)}%`);
+      setStatus(`Filling selected ${pluralVoidWord(kind, 2)}… ${Math.round(msg.fraction * 100)}%${eta(msg.fraction)}`);
       return;
     }
     if (msg.type !== "cavity-result") return;

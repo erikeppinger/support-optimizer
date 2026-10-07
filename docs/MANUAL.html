@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Support Optimizer Manual</title>
-<meta name="description" content="Manual and tutorial for Support Optimizer v1.0.10: loading structures, sealing voids, optimizing print orientation, and exporting.">
+<meta name="description" content="Manual and tutorial for Support Optimizer v1.0.11: loading structures, sealing voids, optimizing print orientation, and exporting.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -422,7 +422,7 @@
 
 <div class="shell">
   <nav class="sidebar" id="sidebar">
-    <div class="sidebar-brand"><span class="mark">v1.0.10</span><span class="name">Support Optimizer</span></div>
+    <div class="sidebar-brand"><span class="mark">v1.0.11</span><span class="name">Support Optimizer</span></div>
     <div class="sidebar-sub">Manual &amp; tutorial</div>
 
     <div class="navgroup">
@@ -452,7 +452,7 @@
   <main>
     <div class="content">
 
-      <div class="eyebrow">Documentation &middot; v1.0.10</div>
+      <div class="eyebrow">Documentation &middot; v1.0.11</div>
       <h1 class="title">Support Optimizer</h1>
       <p class="lede">A tool for turning a molecular structure — or any mesh — into something ready to 3D print: it builds or imports the surface, finds and seals interior cavities, searches for the orientation that needs the least support material, and exports a multi-material file a slicer can use.</p>
 
@@ -716,6 +716,7 @@ To target size:     f = target / (current size along the chosen axis)</div>
         <p>A face counts as needing support once it leans past this many degrees from vertical, measured from its own surface normal:</p>
         <div class="formula">lean&deg; = asin(clamp(&minus;normalZ, &minus;1, 1)) &times; 180/&pi;</div>
         <p>0&deg; is a vertical wall (self-supporting); 90&deg; is a flat, downward-facing overhang, the worst case. This single number drives the overhang coloring, the support-path preview, and the cost function Optimize searches on. Set it to match your printer and material: most FDM machines manage about 45&deg;, resin printers often more.</p>
+        <p><strong>Lower angles take longer to compute.</strong> Every face past the angle has to be traced down to whatever is below it, so Optimize and the support-path preview slow down as more faces count as overhangs. On a test sphere, 30&deg; took about twice as long as 45&deg;, and 15&deg; about three times as long.</p>
 
         <h4 class="control-title">Optimize orientation</h4>
         <p>Samples roughly 32 points spread evenly over a sphere (a Fibonacci sphere) plus the 6 axis-aligned directions — mechanical and molecular parts often have their true optimum sitting exactly on one of those, which sphere sampling alone can miss — scores every candidate, refines a small grid around the best few, and picks the winner. The sphere sample is randomly rotated on every run, so how well the search does doesn't depend on how the structure happens to be oriented in its file; the 6 axis directions stay fixed.</p>
@@ -804,6 +805,7 @@ To target size:     f = target / (current size along the chosen axis)</div>
 
         <h3 class="sub-title">Working with very large structures</h3>
         <p>Leave the import resolution on Auto, and check <strong>Use low-res proxy</strong> before running Optimize once the model is past roughly 20,000 triangles (the app will suggest this automatically). Both keep the heavy O(n&sup2;)-class computations — direct orientation cost evaluation especially — off a full-resolution mesh where they'd be impractically slow, without changing the final exported geometry at all.</p>
+        <p>While a long step runs, the status line shows roughly how much time is left, once the step is far enough along to estimate it. A low critical overhang angle makes Optimize noticeably slower (see <a href="#ref-4">Critical overhang angle</a>).</p>
 
         <h3 class="sub-title">Small floating pieces in the slicer</h3>
         <p>Look at <strong>Ligands &amp; ions found</strong> in section 1: a loose ion or crystallization additive sitting apart from the structure prints as its own tiny fragment. Uncheck it and Apply. (Water, the most common cause, is already excluded.)</p>
@@ -860,7 +862,7 @@ To target size:     f = target / (current size along the chosen axis)</div>
       </section>
 
       <footer class="docfoot">
-        Support Optimizer &middot; manual updated for v1.0.10. If this page and an in-app "?" help panel ever disagree, the in-app text is closer to the running code.
+        Support Optimizer &middot; manual updated for v1.0.11. If this page and an in-app "?" help panel ever disagree, the in-app text is closer to the running code.
       </footer>
 
     </div>

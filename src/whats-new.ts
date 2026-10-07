@@ -7,6 +7,13 @@ export interface ReleaseNotes {
 
 export const WHATS_NEW: ReleaseNotes[] = [
   {
+    version: "1.0.11",
+    items: [
+      "Long steps — building a surface, finding or filling cavities, searching orientations — now show roughly how much time is left in the status line.",
+      "The help for the critical overhang angle now explains that lower angles take longer to compute.",
+    ],
+  },
+  {
     version: "1.0.10",
     items: [
       "3MF export keeps your model in one piece: instead of one part per color, it saves a single closed mesh with each color painted onto its own extruder, the way PrusaSlicer, Bambu Studio and OrcaSlicer's own paint tools do. Slicers no longer report open edges, and a ChimeraX-painted model keeps its painting through optimization.",

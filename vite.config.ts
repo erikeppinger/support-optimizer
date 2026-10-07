@@ -1,6 +1,8 @@
 /// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import { readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Single source of truth for the version shown in the UI (see
@@ -18,6 +20,10 @@ export default defineConfig({
   // Relative asset paths, so the same build works at a domain root (Tauri)
   // and under GitHub Pages' /support-optimizer/ sub-path.
   base: "./",
+  // Outside the project: the project lives in a Dropbox folder, and file
+  // locks there kept breaking Vite's cache renames (EBUSY) even with
+  // node_modules excluded from sync.
+  cacheDir: join(tmpdir(), "vite-cache-support-optimizer"),
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
