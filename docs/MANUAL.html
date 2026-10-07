@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Support Optimizer Manual</title>
-<meta name="description" content="Manual and tutorial for Support Optimizer v1.0.9: loading structures, sealing voids, optimizing print orientation, and exporting.">
+<meta name="description" content="Manual and tutorial for Support Optimizer v1.0.10: loading structures, sealing voids, optimizing print orientation, and exporting.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -422,7 +422,7 @@
 
 <div class="shell">
   <nav class="sidebar" id="sidebar">
-    <div class="sidebar-brand"><span class="mark">v1.0.9</span><span class="name">Support Optimizer</span></div>
+    <div class="sidebar-brand"><span class="mark">v1.0.10</span><span class="name">Support Optimizer</span></div>
     <div class="sidebar-sub">Manual &amp; tutorial</div>
 
     <div class="navgroup">
@@ -452,7 +452,7 @@
   <main>
     <div class="content">
 
-      <div class="eyebrow">Documentation &middot; v1.0.9</div>
+      <div class="eyebrow">Documentation &middot; v1.0.10</div>
       <h1 class="title">Support Optimizer</h1>
       <p class="lede">A tool for turning a molecular structure — or any mesh — into something ready to 3D print: it builds or imports the surface, finds and seals interior cavities, searches for the orientation that needs the least support material, and exports a multi-material file a slicer can use.</p>
 
@@ -570,7 +570,7 @@
           <div class="step-body">
             <div class="step-title">Export</div>
             <div class="step-action">Section 5 &middot; Export STL / Export 3MF</div>
-            <p>Click <strong>Export STL</strong> for a standard single-material file, or <strong>Export 3MF</strong> if you want each chain to land in your slicer as its own selectable part (for multi-filament or multi-resin printing). Both are welded into a proper indexed mesh on export, so a slicer's manifold checker won't flag false "open edges." In the desktop app a Save As dialog lets you choose where the file goes.</p>
+            <p>Click <strong>Export STL</strong> for a standard single-material file, or <strong>Export 3MF</strong> if you want each chain printed in its own filament: the 3MF arrives in your slicer as one part with each chain's color painted onto its own extruder. Both are welded into a proper indexed mesh on export, so a slicer's manifold checker won't flag false "open edges." In the desktop app a Save As dialog lets you choose where the file goes.</p>
           </div>
         </div>
 
@@ -752,8 +752,9 @@ To target size:     f = target / (current size along the chosen axis)</div>
         <p>Every mesh this app builds internally is a non-indexed triangle soup — geometrically closed, but with no triangle sharing a vertex with its neighbor. Left as-is, some slicers' manifold checkers misread that as open edges even though nothing is actually missing. Export welds the geometry by position into a properly indexed mesh first — a boundary between two differently-colored regions stays deliberately split, since a single vertex can't be two colors at once.</p>
 
         <h4 class="control-title">Export 3MF (multi-material)</h4>
-        <p>Same welding as STL export, but 3MF also carries color: triangles are grouped into separate materials <strong>and</strong> separate objects, so a slicer's object list shows every part individually — selectable, assignable to its own filament or resin.</p>
-        <p>With subunit colors showing, that's one object per chain; the overhang marking visible on screen is left out on purpose so it can't split a chain into meaningless extra parts. With overhang colors showing instead, export groups by those (typically two objects: needs support / self-supporting).</p>
+        <p>Saves the model as one closed mesh with each color <strong>painted</strong> onto its own extruder — the same per-triangle painting PrusaSlicer, Bambu Studio and OrcaSlicer write with their own multi-material paint tools. The slicer opens it as a single part with no open edges: the first color on extruder 1, the second on extruder 2, and so on. Reassign extruders in the slicer if needed.</p>
+        <p>Colors follow what's on screen: with subunit colors showing, one color per chain — the overhang marking is left out on purpose so it can't paint part of a chain onto another extruder. With overhang colors showing instead, the two overhang colors are painted. A 3MF you imported keeps its own colors.</p>
+        <p>Slicer painting has codes for at most 15 colors. Beyond that, each color is saved as its own part instead, and slicers will report open edges where the parts meet.</p>
       </section>
 
       <!-- ============ CONCEPTS ============ -->
@@ -815,7 +816,7 @@ To target size:     f = target / (current size along the chosen axis)</div>
         <table class="tbl">
           <tr><th>Use STL when&hellip;</th><th>Use 3MF when&hellip;</th></tr>
           <tr><td>Single material/color print</td><td>Multi-material or multi-color print</td></tr>
-          <tr><td>Your slicer or workflow expects STL</td><td>You want each chain as a separate, individually assignable part</td></tr>
+          <tr><td>Your slicer or workflow expects STL</td><td>You want each chain printed in its own filament</td></tr>
           <tr><td>Simplicity — one file, no material data</td><td>Subunit coloring should survive into the slicer</td></tr>
         </table>
         </div>
@@ -834,7 +835,7 @@ To target size:     f = target / (current size along the chosen axis)</div>
         </div>
         <div class="faq-item">
           <div class="faq-q">My slicer says the exported file has open edges — is something wrong?</div>
-          <p class="faq-a">Unlikely — see <a href="#ref-5">Export STL</a>. The app welds the mesh into a properly indexed form specifically to avoid this, but a slicer's manifold checker can occasionally still be strict about very thin, sharp features regardless of source. If it persists, try raising the resolution the affected region was built or sealed at.</p>
+          <p class="faq-a">Unlikely — see <a href="#ref-5">Export STL</a>. The app welds the mesh into a properly indexed form specifically to avoid this, but a slicer's manifold checker can occasionally still be strict about very thin, sharp features regardless of source. If it persists, try raising the resolution the affected region was built or sealed at. A 3MF with more than 15 colors is the exception: it's saved as one part per color, and the borders between parts are open by design (see <a href="#ref-5">Export 3MF</a>).</p>
         </div>
         <div class="faq-item">
           <div class="faq-q">Why didn't Fill change how the model looks?</div>
@@ -859,7 +860,7 @@ To target size:     f = target / (current size along the chosen axis)</div>
       </section>
 
       <footer class="docfoot">
-        Support Optimizer &middot; manual updated for v1.0.9. If this page and an in-app "?" help panel ever disagree, the in-app text is closer to the running code.
+        Support Optimizer &middot; manual updated for v1.0.10. If this page and an in-app "?" help panel ever disagree, the in-app text is closer to the running code.
       </footer>
 
     </div>

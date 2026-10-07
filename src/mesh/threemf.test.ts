@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
 import { zipSync, strToU8, unzipSync, strFromU8 } from "fflate";
-import { parse3MF, build3MF, computeFlatNormals } from "./threemf";
+import { parse3MF, build3MF, buildPainted3MF, paintPalette, computeFlatNormals, MAX_PAINTED_COLORS } from "./threemf";
 import { weldGeometryForExport } from "./weld-geometry";
 
 const CORE_NS = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02";
@@ -171,6 +171,70 @@ describe("build3MF + parse3MF round-trip", () => {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]), 3));
     expect(() => build3MF(geometry)).toThrow();
+  });
+});
+
+/** Two triangles sharing the edge (1,0,0)-(0,1,0), one red and one blue —
+ * the smallest case where a color border runs through the mesh. */
+function twoColorSquare() {
+  const position = new Float32Array([
+    0, 0, 0, 1, 0, 0, 0, 1, 0,
+    1, 0, 0, 1, 1, 0, 0, 1, 0,
+  ]);
+  const triColors = new Float32Array([1, 0, 0, 0, 0, 1]);
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(position, 3));
+  return { welded: weldGeometryForExport(geometry, 1e-5, { splitAtColorBorders: false }), triColors };
+}
+
+function modelXml(buffer: ArrayBuffer): string {
+  return strFromU8(unzipSync(new Uint8Array(buffer))["3D/3dmodel.model"]);
+}
+
+describe("buildPainted3MF", () => {
+  it("writes one object whose triangles share vertices across a color border", () => {
+    const { welded, triColors } = twoColorSquare();
+    const xml = modelXml(buildPainted3MF(welded, triColors));
+    expect((xml.match(/<object /g) ?? []).length).toBe(1);
+    // 4 unique corners: the shared edge is not split at the color border.
+    expect((xml.match(/<vertex /g) ?? []).length).toBe(4);
+  });
+
+  it("paints each color with the same code under both slicer attribute names", () => {
+    const { welded, triColors } = twoColorSquare();
+    const xml = modelXml(buildPainted3MF(welded, triColors));
+    const tris = [...xml.matchAll(/slic3rpe:mmu_segmentation="([^"]+)" paint_color="([^"]+)"/g)];
+    expect(tris.map((m) => m[1])).toEqual(["4", "8"]); // extruders 1 and 2
+    for (const m of tris) expect(m[2]).toBe(m[1]);
+  });
+
+  it("includes PrusaSlicer's config with one volume spanning every triangle", () => {
+    const { welded, triColors } = twoColorSquare();
+    const config = strFromU8(unzipSync(new Uint8Array(buildPainted3MF(welded, triColors)))["Metadata/Slic3r_PE_model.config"]);
+    expect(config).toContain('firstid="0" lastid="1"');
+  });
+
+  it("round-trips through parse3MF with each triangle's color intact", () => {
+    const { welded, triColors } = twoColorSquare();
+    const parsed = parse3MF(buildPainted3MF(welded, triColors));
+    expect(Array.from(parsed.color.slice(0, 3))).toEqual([1, 0, 0]);
+    expect(Array.from(parsed.color.slice(9, 12))).toEqual([0, 0, 1]);
+  });
+
+  it("writes a single-color model without paint codes", () => {
+    const { welded } = twoColorSquare();
+    const xml = modelXml(buildPainted3MF(welded, new Float32Array([0.5, 0.5, 0.5, 0.5, 0.5, 0.5])));
+    expect(xml).not.toContain("mmu_segmentation");
+  });
+});
+
+describe("paintPalette", () => {
+  it("orders colors by first appearance and gives up past the paint-code limit", () => {
+    const n = MAX_PAINTED_COLORS + 1;
+    const colors = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) colors[i * 3] = i / n;
+    expect(paintPalette(colors.slice(0, MAX_PAINTED_COLORS * 3))!.palette).toHaveLength(MAX_PAINTED_COLORS);
+    expect(paintPalette(colors)).toBeNull();
   });
 });
 

@@ -48,7 +48,7 @@ function dialogHtml(version: string): string {
         <li><strong>Load a model</strong> — drop an STL, PDB, mmCIF or 3MF file onto the viewer, or type a PDB ID under <em>1. Load model</em> and click Fetch (try <code>6LU7</code>).</li>
         <li><strong>Seal cavities</strong> — under <em>3. Voids &amp; cavities</em>, click Find cavities, then Fill selected cavities.</li>
         <li><strong>Optimize the orientation</strong> — under <em>4. Optimize orientation</em>, click Optimize orientation.</li>
-        <li><strong>Export</strong> — under <em>5. Export</em>, save an STL, or a 3MF with one part per chain.</li>
+        <li><strong>Export</strong> — under <em>5. Export</em>, save an STL, or a 3MF with each chain's color painted onto its own extruder.</li>
       </ol>
       <p>Every control has a <span class="about-q">?</span> button that explains what it does.</p>
 

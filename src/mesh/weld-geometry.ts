@@ -24,11 +24,17 @@ import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js";
  * live viewer keeps its current flat-shaded look and doesn't pay this
  * extra pass on every recolor/reframe.
  */
-export function weldGeometryForExport(geometry: THREE.BufferGeometry, tolerance = 1e-5): THREE.BufferGeometry {
+export function weldGeometryForExport(
+  geometry: THREE.BufferGeometry,
+  tolerance = 1e-5,
+  { splitAtColorBorders = true }: { splitAtColorBorders?: boolean } = {},
+): THREE.BufferGeometry {
   const forWelding = new THREE.BufferGeometry();
   forWelding.setAttribute("position", geometry.getAttribute("position"));
+  // Position-only welding is for exports that carry color per triangle
+  // rather than per vertex (painted 3MF), so color borders stay closed.
   const colorAttr = geometry.getAttribute("color");
-  if (colorAttr) forWelding.setAttribute("color", colorAttr);
+  if (colorAttr && splitAtColorBorders) forWelding.setAttribute("color", colorAttr);
 
   const welded = mergeVertices(forWelding, tolerance);
   welded.computeVertexNormals();

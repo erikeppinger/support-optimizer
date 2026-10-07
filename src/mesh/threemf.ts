@@ -251,6 +251,119 @@ function quantizeColor(r: number, g: number, b: number): string {
   return `${q(r)},${q(g)},${q(b)}`;
 }
 
+const toHex = (c: number) => Math.round(THREE.MathUtils.clamp(c, 0, 1) * 255).toString(16).padStart(2, "0");
+
+const CONTENT_TYPES_XML =
+  `<?xml version="1.0" encoding="UTF-8"?>` +
+  `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+  `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+  `<Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>` +
+  `<Default Extension="config" ContentType="application/vnd.ms-printing.printticket+xml"/>` +
+  `</Types>`;
+
+const RELS_XML =
+  `<?xml version="1.0" encoding="UTF-8"?>` +
+  `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+  `<Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>` +
+  `</Relationships>`;
+
+/** Slicer paint codes cover extruders 1..15 (index 0 is "unpainted"). */
+export const MAX_PAINTED_COLORS = MMU_SEGMENTATION_CODES.length - 1;
+
+/** Distinct colors in first-appearance order, so the first color met becomes
+ * extruder 1. Returns null when there are more than MAX_PAINTED_COLORS. */
+export function paintPalette(triangleColors: Float32Array): { palette: [number, number, number][]; triColorIndex: Uint8Array } | null {
+  const triCount = triangleColors.length / 3;
+  const byKey = new Map<string, number>();
+  const palette: [number, number, number][] = [];
+  const triColorIndex = new Uint8Array(triCount);
+  for (let t = 0; t < triCount; t++) {
+    const r = triangleColors[t * 3], g = triangleColors[t * 3 + 1], b = triangleColors[t * 3 + 2];
+    const key = quantizeColor(r, g, b);
+    let i = byKey.get(key);
+    if (i === undefined) {
+      if (palette.length === MAX_PAINTED_COLORS) return null;
+      i = palette.length;
+      byKey.set(key, i);
+      palette.push([r, g, b]);
+    }
+    triColorIndex[t] = i;
+  }
+  return { palette, triColorIndex };
+}
+
+/**
+ * Exports an indexed, position-welded geometry as ONE object with ONE mesh,
+ * coloring each triangle with the slicers' own per-triangle paint codes —
+ * `slic3rpe:mmu_segmentation` (PrusaSlicer) and `paint_color` (Bambu Studio,
+ * OrcaSlicer), which share one encoding (see MMU_SEGMENTATION_CODES). Both
+ * families ignore the standard <basematerials>/pid colors on import, and
+ * splitting the mesh into one object per color leaves every part with open
+ * edges along its color borders; painting keeps the mesh whole. The standard
+ * colors are still written, for generic 3MF viewers.
+ *
+ * `triangleColors` holds one RGB per triangle, in index order; at most
+ * MAX_PAINTED_COLORS distinct colors (see paintPalette). A single color is
+ * written unpainted.
+ */
+export function buildPainted3MF(geometry: THREE.BufferGeometry, triangleColors: Float32Array): ArrayBuffer {
+  const index = geometry.getIndex();
+  if (!index) throw new Error("buildPainted3MF requires an indexed geometry (see weldGeometryForExport)");
+  const painted = paintPalette(triangleColors);
+  if (!painted) throw new Error(`buildPainted3MF supports at most ${MAX_PAINTED_COLORS} colors`);
+  const { palette, triColorIndex } = painted;
+  const paint = palette.length > 1;
+  const position = geometry.attributes.position;
+  const triCount = index.count / 3;
+
+  const materialLines = palette
+    .map((c, i) => `<base name="Color ${i + 1}" displaycolor="#${toHex(c[0])}${toHex(c[1])}${toHex(c[2])}FF"/>`)
+    .join("");
+
+  const vertexLines: string[] = [];
+  for (let v = 0; v < position.count; v++) {
+    vertexLines.push(`<vertex x="${position.getX(v)}" y="${position.getY(v)}" z="${position.getZ(v)}"/>`);
+  }
+  const triangleLines: string[] = [];
+  for (let t = 0; t < triCount; t++) {
+    const ci = triColorIndex[t];
+    const code = paint ? MMU_SEGMENTATION_CODES[ci + 1] : "";
+    const paintAttrs = paint ? ` slic3rpe:mmu_segmentation="${code}" paint_color="${code}"` : "";
+    triangleLines.push(
+      `<triangle v1="${index.getX(t * 3)}" v2="${index.getX(t * 3 + 1)}" v3="${index.getX(t * 3 + 2)}" pid="1" p1="${ci}"${paintAttrs}/>`,
+    );
+  }
+
+  const modelXML =
+    `<?xml version="1.0" encoding="UTF-8"?>` +
+    `<model unit="millimeter" xml:lang="en-US" xmlns="${CORE_NS}" xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02" xmlns:slic3rpe="http://schemas.slic3r.org/3mf/2017/06">` +
+    `<resources>` +
+    `<basematerials id="1">${materialLines}</basematerials>` +
+    `<object id="2" type="model" name="model" pid="1" pindex="0">` +
+    `<mesh><vertices>${vertexLines.join("")}</vertices><triangles>${triangleLines.join("")}</triangles></mesh>` +
+    `</object>` +
+    `</resources>` +
+    `<build><item objectid="2"/></build>` +
+    `</model>`;
+
+  // PrusaSlicer reads object/volume structure from this file; one volume
+  // spanning every triangle keeps the mesh a single part.
+  const prusaConfig =
+    `<?xml version="1.0" encoding="UTF-8"?>\n<config>\n <object id="2">\n` +
+    `  <metadata type="object" key="name" value="model"/>\n` +
+    `  <volume firstid="0" lastid="${triCount - 1}">\n` +
+    `   <metadata type="volume" key="name" value="model"/>\n` +
+    `  </volume>\n </object>\n</config>\n`;
+
+  const zipped = zipSync({
+    "[Content_Types].xml": strToU8(CONTENT_TYPES_XML),
+    "_rels/.rels": strToU8(RELS_XML),
+    "3D/3dmodel.model": strToU8(modelXML),
+    "Metadata/Slic3r_PE_model.config": strToU8(prusaConfig),
+  });
+  return zipped.buffer.slice(zipped.byteOffset, zipped.byteOffset + zipped.byteLength) as ArrayBuffer;
+}
+
 /**
  * Exports an INDEXED geometry as a 3MF file, one <basematerials> entry
  * AND one separate <object> per distinct vertex color found (so a
@@ -300,7 +413,6 @@ export function build3MF(geometry: THREE.BufferGeometry): ArrayBuffer {
   }
   const groupList = [...groups.values()];
 
-  const toHex = (c: number) => Math.round(THREE.MathUtils.clamp(c, 0, 1) * 255).toString(16).padStart(2, "0");
   const materialLines = groupList
     .map((g, i) => `<base name="Part ${i + 1}" displaycolor="#${toHex(g.color[0])}${toHex(g.color[1])}${toHex(g.color[2])}FF"/>`)
     .join("");
@@ -349,22 +461,9 @@ export function build3MF(geometry: THREE.BufferGeometry): ArrayBuffer {
     `<build>${itemLines.join("")}</build>` +
     `</model>`;
 
-  const contentTypesXML =
-    `<?xml version="1.0" encoding="UTF-8"?>` +
-    `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
-    `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
-    `<Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>` +
-    `</Types>`;
-
-  const relsXML =
-    `<?xml version="1.0" encoding="UTF-8"?>` +
-    `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
-    `<Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>` +
-    `</Relationships>`;
-
   const zipped = zipSync({
-    "[Content_Types].xml": strToU8(contentTypesXML),
-    "_rels/.rels": strToU8(relsXML),
+    "[Content_Types].xml": strToU8(CONTENT_TYPES_XML),
+    "_rels/.rels": strToU8(RELS_XML),
     "3D/3dmodel.model": strToU8(modelXML),
   });
   return zipped.buffer.slice(zipped.byteOffset, zipped.byteOffset + zipped.byteLength) as ArrayBuffer;

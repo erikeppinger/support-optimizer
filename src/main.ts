@@ -4,8 +4,8 @@ import { setupScene, frameObject, scaleBuildPlate } from "./viewer/scene-setup";
 import { createAxesGizmo, disposeAxesGizmo, scaleAxesGizmo, positionAxesGizmoAtCorner } from "./viewer/axes-gizmo";
 import { enableModelDragAndDrop, placeOnBuildPlate, clipPlane, loadSTLFile, buildMeshFromGeometry, COMPARISON_MESH_MATERIAL, MESH_MATERIAL } from "./mesh/load-model";
 import { downloadMeshAsSTL } from "./mesh/export-stl";
-import { downloadMeshAs3MF } from "./mesh/export-3mf";
-import { parse3MF, computeFlatNormals } from "./mesh/threemf";
+import { downloadMeshAs3MF, type Export3MFResult } from "./mesh/export-3mf";
+import { parse3MF, computeFlatNormals, MAX_PAINTED_COLORS } from "./mesh/threemf";
 import {
   applyOverhangColors,
   applySubunitColorsWithOverhangHighlight,
@@ -326,8 +326,9 @@ or to whatever surface occludes it first)</span>
         This happens only in the saved copy; the model on screen is untouched.`,
       )}
       <button id="export-3mf-btn" disabled>Export 3MF (multi-material)</button>${help(
-        `Same position-welding as STL export, but 3MF also carries color: triangles are grouped into separate materials — <strong>and</strong> separate objects, one per color group, each with its own <code>&lt;item&gt;</code> placement. A slicer's object list shows each part individually (selectable, assignable to its own filament/AMS slot), not one merged model with only a material hint.<br><br>
-        Grouping always follows <strong>chains</strong>, whichever view is currently on screen: with subunit colors showing, that's one object per chain, exactly matching what you'd expect from "N subunits in, N parts out" — the red overhang highlight visible on screen in that view is left out of the exported file on purpose, so it can't split a single chain into extra, meaningless sub-parts. With overhang colors showing instead, export groups by that (typically 2 objects: needs-support / self-supporting).`,
+        `Saves the model as one closed mesh with each color <strong>painted</strong> onto its own extruder — the same per-triangle painting PrusaSlicer, Bambu Studio and OrcaSlicer write with their own multi-material paint tools. The slicer opens it as a single part with no open edges, the first color on extruder 1, the second on extruder 2, and so on; reassign extruders there if needed.<br><br>
+        Colors follow what's on screen: with subunit colors showing, one color per chain — the overhang highlight is left out on purpose, so it can't paint part of a chain onto another extruder. With overhang colors showing, the two overhang colors are painted instead. A 3MF you imported keeps its own colors.<br><br>
+        Slicer painting has codes for at most ${MAX_PAINTED_COLORS} colors. Beyond that, each color is saved as its own part instead, and slicers will report open edges where the parts meet.`,
       )}
     </details>
 
@@ -2255,16 +2256,20 @@ export3mfBtnEl.addEventListener("click", async () => {
   if (showSubunitColorsEl.checked && subunitColor) {
     currentMesh.geometry.setAttribute("color", new THREE.BufferAttribute(subunitColor.slice(), 3));
   }
-  let saved: boolean;
+  let result: Export3MFResult;
   try {
-    saved = await downloadMeshAs3MF(currentMesh, filename, baseHeightMm);
+    result = await downloadMeshAs3MF(currentMesh, filename, baseHeightMm);
   } finally {
     if (liveColorAttr) currentMesh.geometry.setAttribute("color", liveColorAttr);
   }
-  if (!saved) return;
-  const exportStatus = baseHeightMm > 0
-    ? `Exported ${filename} (base raised to Z=${baseHeightMm.toFixed(2)}mm)`
-    : `Exported ${filename}`;
+  if (!result.saved) return;
+  const raised = baseHeightMm > 0 ? ` (base raised to Z=${baseHeightMm.toFixed(2)}mm)` : "";
+  const how = result.mode === "painted"
+    ? result.colorCount > 1
+      ? ` — one closed mesh, ${result.colorCount} colors painted onto extruders 1–${result.colorCount}`
+      : ""
+    : ` — more than ${MAX_PAINTED_COLORS} colors, so each color is its own part; slicers will report open edges where parts meet`;
+  const exportStatus = `Exported ${filename}${raised}${how}`;
   setStatus(exportStatus);
   logEvent(exportStatus);
 });
