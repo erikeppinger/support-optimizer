@@ -209,23 +209,12 @@ export function buildCavityHighlightMesh(grid: VoxelGrid, component: VoidCompone
 }
 
 export interface SealContext {
-  /** Per-voxel Euclidean distance (in detection-voxel units) to the
-   * nearest SOLID voxel — a real-valued generalization of "how many
-   * voxels of erosion margin can this voxel still afford," rather than
-   * the old binary 6-connected-neighbors-present test, which required a
-   * whole extra voxel of clearance in EVERY one of the 3 axes simultaneously
-   * to survive even one step (so it erased any cavity narrower than 3
-   * voxels across in any single axis, everywhere along its length — most
-   * of a real structure's interior pockets, in practice). A distance
-   * transform lets the margin be fractional and isotropic instead. */
+  /** Per-voxel Euclidean distance (detection-voxel units) to the nearest
+   * solid voxel — how far a tunnel's seal is pulled back from its walls. */
   solidDist: Float32Array;
-  /** Per-voxel distance to the nearest voxel floodFillExterior actually
-   * reached from outside — i.e. how many voxels of solid material stand
-   * between this point and confirmed open air, through the SHORTEST
-   * path. Used to tell a cavity that's nowhere near the true exterior
-   * (no plausible protrusion risk, however this is sealed) apart from
-   * one separated from it by only a thin wall (where the margin below
-   * still matters). */
+  /** Per-voxel distance to the nearest voxel floodFillExterior reached from
+   * outside — bounds how far a cavity's seal may grow into solid material
+   * without approaching the outer surface. */
   exteriorDist: Float32Array;
 }
 
@@ -243,74 +232,61 @@ export function buildSealContext(grid: VoxelGrid, reached: Uint8Array): SealCont
   };
 }
 
-/** How many detection voxels of safety margin to erode off a TUNNEL's
- * boundary before sealing it — kept as the original fixed, conservative
- * margin (never falls back toward 0 the way a cavity's ladder can, see
- * buildSealPatchMesh) since a tunnel always has a real opening nearby
- * that a zero-margin seal could wrongly cap shut. */
+/** How many detection voxels a TUNNEL's seal is pulled back from its walls.
+ * Tunnels are detected among space reachable from outside, so growing their
+ * seals into the walls the way cavity seals do would need its own guard
+ * against the outer surface; until then they keep this pull-back and are
+ * not fused with their walls. */
 const SEAL_EROSION_MARGIN_VOXELS = 1;
 
-/** A cavity that never comes within this many detection voxels of the
- * true exterior (through solid material, by the shortest path) is far
- * enough from it that voxelizeSurface's own coarse solid/empty
- * classification — accurate to roughly ±1 voxel at a thin exterior wall,
- * see buildSealPatchMesh below — cannot plausibly be wrong by enough to
- * make a full-extent (zero-margin) seal poke through a real surface.
- * Comfortably above 1 for margin against that ±1 uncertainty itself. */
-const SAFE_EXTERIOR_DISTANCE_VOXELS = 2;
+/** How far (detection voxels) a CAVITY's seal reaches into the solid around
+ * it. A seal that stops at the cavity's detected boundary leaves a gap of up
+ * to about a voxel to the real wall, which a slicer prints as empty space —
+ * the seal becomes a loose plug inside its pocket. Overlapping the walls
+ * makes slicers merge seal and walls into one solid. */
+const SEAL_OVERLAP_VOXELS = 2;
 
-/** Erosion margins tried for a cavity NOT confirmed far from the
- * exterior (or for a tunnel — see buildSealPatchMesh), largest/safest
- * first: the first margin that leaves a non-empty voxel set wins. 1
- * matches this project's original fixed margin; the smaller fallbacks
- * are new — sealing a bit closer to a thin cavity's true boundary is a
- * worthwhile trade against leaving it completely unfilled, which is
- * exactly the failure this whole adaptive scheme replaces. 0 (no
- * erosion at all) is deliberately the last resort here, not the
- * default, since — unlike the "confirmed far from exterior" case above —
- * this path is only reached when the cavity/tunnel might actually be
- * close to real open air. */
-const RISKY_EROSION_MARGINS = [1, 0.75, 0.5, 0.25, 0];
+/** A seal only grows into solid voxels at least this far (detection voxels)
+ * from space reachable from outside. That keeps the overlap off the outer
+ * surface: checked against a 256³ reference of 3NL1 and 1L90, sealed points
+ * end up no further outside the real surface than with no overlap at all
+ * (only at slits — see buildSealPatchMesh). 3 gave the same outward reach
+ * with weaker fusion. */
+const MIN_EXTERIOR_DISTANCE_VOXELS = 2;
+
+const OVERLAP_OFFSETS: number[][] = [];
+for (let dz = -SEAL_OVERLAP_VOXELS; dz <= SEAL_OVERLAP_VOXELS; dz++)
+  for (let dy = -SEAL_OVERLAP_VOXELS; dy <= SEAL_OVERLAP_VOXELS; dy++)
+    for (let dx = -SEAL_OVERLAP_VOXELS; dx <= SEAL_OVERLAP_VOXELS; dx++)
+      if ((dx || dy || dz) && Math.hypot(dx, dy, dz) <= SEAL_OVERLAP_VOXELS) OVERLAP_OFFSETS.push([dx, dy, dz]);
 
 /**
- * Builds the actual sealing patch for a void component — same
- * construction as buildCavityHighlightMesh, but on a voxel set eroded
- * inward from the component's own detected boundary (see SealContext),
- * and returns null only if every fallback margin leaves nothing (the
- * void is too thin, relative to the detection resolution, to seal at
- * all safely).
+ * Builds the sealing mesh for a void component, or null if nothing is left
+ * to seal (a tunnel thinner than its margin, or a cavity no piece of which
+ * reaches a wall).
  *
- * The full-extent seal used before erosion existed at all traced the
- * boundary exactly where flood-fill first found empty space — but that
- * boundary is only as accurate as voxelizeSurface's own coarse
- * classification of the exterior shell, which is itself a triangle/box-
- * overlap test at the SAME detection resolution. Near a thin wall
- * (thinner than roughly one detection voxel), that classification can be
- * wrong enough that the cavity's coarse boundary sits at or past where
- * the true (finer) exterior surface actually is — sealing exactly there
- * could then visibly protrude through the printed surface. Eroding first
- * gives up a thin (sub-voxel) sliver of unsealed space at the cavity's
- * true edge in exchange for a patch that's guaranteed to stay inside the
- * solid the coarse grid found.
+ * A cavity's own voxels are sealed in full, plus every solid voxel within
+ * SEAL_OVERLAP_VOXELS of it that is at least MIN_EXTERIOR_DISTANCE_VOXELS
+ * from space reachable from outside. The overlap fuses the seal with the
+ * surrounding chain(s) in the slicer; the distance rule keeps the overlap off
+ * the outer surface. Where a cavity sits right under a thin outer wall, the
+ * overlap simply stops there.
  *
- * That risk is specifically about proximity to the true exterior, though
- * — a cavity buried deep inside a structure, nowhere near open air, can't
- * poke through a surface that isn't anywhere nearby regardless of how it's
- * sealed. A cavity confirmed at least SAFE_EXTERIOR_DISTANCE_VOXELS from
- * the exterior skips straight to a full-extent (zero-margin) seal, since
- * none of the above justifies giving up on it; a cavity that might
- * actually be close to open air still gets the cautious margin ladder
- * instead, bottoming out at (but never skipping past) 0 only as a last
- * resort.
+ * Of the result, only face-connected pieces holding both cavity and wall
+ * voxels are kept. The distance rule can cut a wall voxel off from the rest
+ * of the seal, and a cavity voxel can touch the rest of its cavity only at
+ * an edge; either alone would export as a separate speck, loose in the
+ * slicer.
  *
- * A tunnel is deliberately kept OUT of that ladder's zero-margin fallback
- * entirely, unlike a cavity: by definition a tunnel always has at least
- * one point at or near a real opening to the outside (that's what makes
- * it a tunnel and not a cavity), so a zero-margin seal there risks
- * capping that opening shut — not a surface protrusion, but arguably
- * worse (a channel that was supposed to stay open, doesn't). A skipped
- * tunnel seal (todays' "too thin" outcome, unchanged here) is a far
- * safer failure than silently plugging one.
+ * "Enclosed" is as seen at the detection resolution: a pocket joined to the
+ * outside only by a slit narrower than about one voxel counts as a cavity,
+ * and sealing it closes that slit too — up to 1.7 voxels deep across 20
+ * random PDB assemblies, never on single-chain ones, and up to 1.84 once
+ * snapSealsToWalls has pulled the seal onto the walls. In print units that is
+ * a fixed share of the model's size (~2% at 64³), so it grows with print
+ * size; a finer detection grid shrinks it.
+ *
+ * A tunnel keeps the fixed pull-back instead (see SEAL_EROSION_MARGIN_VOXELS).
  */
 export function buildSealPatchMesh(grid: VoxelGrid, component: VoidComponent, ctx: SealContext): ComponentHighlightMesh | null {
   const { solidDist, exteriorDist } = ctx;
@@ -320,17 +296,36 @@ export function buildSealPatchMesh(grid: VoxelGrid, component: VoidComponent, ct
     return eroded.length > 0 ? remeshVoxelSubset(grid, component.id, eroded) : null;
   }
 
-  let minExteriorDist = Infinity;
+  const { nx, ny, nz, solid } = grid;
+  const seal = new Set(component.voxels);
   for (const v of component.voxels) {
-    if (exteriorDist[v] < minExteriorDist) minExteriorDist = exteriorDist[v];
-    if (minExteriorDist < SAFE_EXTERIOR_DISTANCE_VOXELS) break;
+    const z = Math.floor(v / (nx * ny));
+    const y = Math.floor((v - z * nx * ny) / nx);
+    const x = v - z * nx * ny - y * nx;
+    for (const [dx, dy, dz] of OVERLAP_OFFSETS) {
+      const xx = x + dx, yy = y + dy, zz = z + dz;
+      if (xx < 0 || yy < 0 || zz < 0 || xx >= nx || yy >= ny || zz >= nz) continue;
+      const n = voxelIndex(grid, xx, yy, zz);
+      if (solid[n] && exteriorDist[n] >= MIN_EXTERIOR_DISTANCE_VOXELS) seal.add(n);
+    }
   }
-  const isFarFromExterior = minExteriorDist >= SAFE_EXTERIOR_DISTANCE_VOXELS;
-
-  const margins = isFarFromExterior ? [0] : RISKY_EROSION_MARGINS;
-  for (const margin of margins) {
-    const eroded = component.voxels.filter((v) => solidDist[v] > margin);
-    if (eroded.length > 0) return remeshVoxelSubset(grid, component.id, eroded);
+  const steps = [1, -1, nx, -nx, nx * ny, -nx * ny];
+  const seen = new Set<number>();
+  const kept: number[] = [];
+  for (const start of seal) {
+    if (seen.has(start)) continue;
+    seen.add(start);
+    const piece = [start];
+    let hasCavity = false, hasWall = false;
+    for (let i = 0; i < piece.length; i++) {
+      const v = piece[i];
+      if (solid[v]) hasWall = true; else hasCavity = true;
+      for (const d of steps) {
+        const n = v + d;
+        if (seal.has(n) && !seen.has(n)) { seen.add(n); piece.push(n); }
+      }
+    }
+    if (hasCavity && hasWall) kept.push(...piece);
   }
-  return null;
+  return kept.length > 0 ? remeshVoxelSubset(grid, component.id, kept) : null;
 }

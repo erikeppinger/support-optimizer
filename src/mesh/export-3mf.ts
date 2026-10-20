@@ -39,9 +39,10 @@ function triangleColorsOf(geometry: THREE.BufferGeometry): Float32Array {
  * left, so the export falls back to one object per color — whose color
  * borders are open edges.
  * `baseHeightMm` mirrors downloadMeshAsSTL's breakaway-support offset,
- * applied to a cloned geometry only.
+ * applied to a cloned geometry only. `colorThrough` and `closeGaps` are
+ * passed on to buildPainted3MF.
  */
-export async function downloadMeshAs3MF(mesh: THREE.Mesh, filename: string, baseHeightMm = 0): Promise<Export3MFResult> {
+export async function downloadMeshAs3MF(mesh: THREE.Mesh, filename: string, baseHeightMm = 0, colorThrough = false, closeGaps = false): Promise<Export3MFResult> {
   const exportGeometry = (mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry.clone());
   exportGeometry.computeBoundingBox();
   const offsetZ = baseHeightMm - exportGeometry.boundingBox!.min.z;
@@ -56,7 +57,7 @@ export async function downloadMeshAs3MF(mesh: THREE.Mesh, filename: string, base
     // Welding by position only keeps triangle order, so triangleColors
     // still lines up with the welded index buffer.
     const welded = weldGeometryForExport(exportGeometry, 1e-5, { splitAtColorBorders: false });
-    buffer = buildPainted3MF(welded, triangleColors);
+    buffer = buildPainted3MF(welded, triangleColors, colorThrough, closeGaps);
     welded.dispose();
     result = { mode: "painted", colorCount: painted.palette.length };
   } else {

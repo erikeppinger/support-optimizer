@@ -7,6 +7,15 @@ export interface ReleaseNotes {
 
 export const WHATS_NEW: ReleaseNotes[] = [
   {
+    version: "1.0.12",
+    items: [
+      "Filled cavities now become part of the subunit around them. A cavity inside one chain is filled exactly, by removing its inner skin; a pocket between chains gets a seal that reaches slightly into the surrounding walls. Either way the slicer prints one continuous solid instead of a loose plug inside its pocket.",
+      "Find cavities lists only genuinely empty space. A chain's own inside, and the overlap between neighboring chains, were showing up as cavities and getting an extra inner skin when filled.",
+      "3MF export has a new option, on by default: color each chain all the way through in PrusaSlicer. Prusa's current profiles for the MK4/MK4S, Core One and XL carry painted colors only 5 mm into the model, so the inside of a chain came out in another extruder's color, with extra walls around it. OrcaSlicer's profiles keep that limit off.",
+      "Filled cavities print as solid material without tiny leftover pockets: seals now reach the real cavity walls, and a new 3MF export option, on by default, has PrusaSlicer close gaps narrower than the nozzle.",
+    ],
+  },
+  {
     version: "1.0.11",
     items: [
       "Long steps — building a surface, finding or filling cavities, searching orientations — now show roughly how much time is left in the status line.",

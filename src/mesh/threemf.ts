@@ -270,6 +270,10 @@ const RELS_XML =
 /** Slicer paint codes cover extruders 1..15 (index 0 is "unpainted"). */
 export const MAX_PAINTED_COLORS = MMU_SEGMENTATION_CODES.length - 1;
 
+/** Slice gap closing radius written by buildPainted3MF's closeGaps: half a
+ * 0.4 mm nozzle, so gaps the nozzle couldn't print anyway are closed. */
+export const CLOSE_GAPS_RADIUS_MM = 0.2;
+
 /** Distinct colors in first-appearance order, so the first color met becomes
  * extruder 1. Returns null when there are more than MAX_PAINTED_COLORS. */
 export function paintPalette(triangleColors: Float32Array): { palette: [number, number, number][]; triColorIndex: Uint8Array } | null {
@@ -305,8 +309,19 @@ export function paintPalette(triangleColors: Float32Array): { palette: [number, 
  * `triangleColors` holds one RGB per triangle, in index order; at most
  * MAX_PAINTED_COLORS distinct colors (see paintPalette). A single color is
  * written unpainted.
+ *
+ * `colorThrough` sets PrusaSlicer's mmu_segmented_region_max_width to 0 for
+ * this object. Profiles that limit it (Prusa's MK4/MK4S, Core One and XL ones use 5 mm) carry paint only
+ * that far in and give the core beyond it a color of its own, with its own
+ * walls; 0 lets each color fill its region all the way through.
+ *
+ * `closeGaps` sets PrusaSlicer's slice_closing_radius to CLOSE_GAPS_RADIUS_MM
+ * for this object (its default is 0.049 mm), so each layer closes gaps
+ * narrower than a 0.4 mm nozzle. That catches pinholes a cavity seal can
+ * leave at a pocket's narrow tip, which would otherwise print as tiny walled
+ * pockets.
  */
-export function buildPainted3MF(geometry: THREE.BufferGeometry, triangleColors: Float32Array): ArrayBuffer {
+export function buildPainted3MF(geometry: THREE.BufferGeometry, triangleColors: Float32Array, colorThrough = false, closeGaps = false): ArrayBuffer {
   const index = geometry.getIndex();
   if (!index) throw new Error("buildPainted3MF requires an indexed geometry (see weldGeometryForExport)");
   const painted = paintPalette(triangleColors);
@@ -351,6 +366,8 @@ export function buildPainted3MF(geometry: THREE.BufferGeometry, triangleColors: 
   const prusaConfig =
     `<?xml version="1.0" encoding="UTF-8"?>\n<config>\n <object id="2">\n` +
     `  <metadata type="object" key="name" value="model"/>\n` +
+    (paint && colorThrough ? `  <metadata type="object" key="mmu_segmented_region_max_width" value="0"/>\n` : "") +
+    (closeGaps ? `  <metadata type="object" key="slice_closing_radius" value="${CLOSE_GAPS_RADIUS_MM}"/>\n` : "") +
     `  <volume firstid="0" lastid="${triCount - 1}">\n` +
     `   <metadata type="volume" key="name" value="model"/>\n` +
     `  </volume>\n </object>\n</config>\n`;

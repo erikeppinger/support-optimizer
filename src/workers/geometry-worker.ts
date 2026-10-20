@@ -1,9 +1,11 @@
 import * as THREE from "three";
 import { searchBestOrientation, evaluateOrientationCost } from "../geometry/orientation-search";
-import { voxelizeSurface } from "../geometry/voxelize";
+import { voxelizeSurface, fillInterior } from "../geometry/voxelize";
 import { detectVoidComponents, detectVoidComponentsFull, summarize, buildCavityHighlightMesh, buildSealContext, buildSealPatchMesh } from "../geometry/detect-voids";
 import type { VoidComponentSummary, ComponentHighlightMesh } from "../geometry/detect-voids";
 import { marchingCubes } from "../geometry/marching-cubes";
+import { planInnerShellFills } from "../geometry/inner-shells";
+import { snapSealsToWalls } from "../geometry/snap-seal";
 import { buildChainMeshes, DEFAULT_PROBE_RADIUS, parsePDBAtoms } from "../geometry/pdb";
 import type { Atom, ChainMeshEntry } from "../geometry/pdb";
 import { parseCIFAtoms } from "../geometry/mmcif";
@@ -113,17 +115,22 @@ export type WorkerResponse =
       patchNormal: Float32Array;
       filledVoxelCount: number;
       sealedCount: number;
-      /** Selected cavities eroded down to nothing (too thin, relative to
-       * the detection resolution, to seal safely — see
-       * buildSealPatchMesh) and were skipped rather than risk a patch
-       * that protrudes through the exterior surface. */
+      /** Selected voids buildSealPatchMesh returned null for: a tunnel
+       * eroded down to nothing (too thin, relative to the detection
+       * resolution, to seal without risking a protrusion), or a cavity no
+       * piece of which reaches a wall. */
       skippedCount: number;
-      /** Parallel arrays (same length as sealedCount): the id and vertex
-       * count of each sealed component, in the order its vertices appear
-       * in patchPosition/patchNormal. Lets the caller color each patch
-       * individually (e.g. by nearest chain) instead of uniformly. */
+      /** Parallel arrays: the id and vertex count of each component sealed
+       * with a patch, in the order its vertices appear in
+       * patchPosition/patchNormal. Lets the caller color each patch
+       * individually (e.g. by nearest chain) instead of uniformly. Cavities
+       * filled by removing their inner surface (removedTriangles) have no
+       * patch and aren't listed. */
       sealedIds: number[];
       sealedVertexCounts: number[];
+      /** Triangles of the input mesh to delete: the inner surfaces of
+       * cavities enclosed by a single chain, which fills them exactly. */
+      removedTriangles: Int32Array;
     }
   | {
       type: "support-paths-result";
@@ -219,6 +226,7 @@ ctx.onmessage = (e: MessageEvent<WorkerRequest>) => {
   if (msg.type === "detect-voids") {
     ctx.postMessage({ type: "progress", fraction: 0.3 } satisfies WorkerResponse);
     const grid = voxelizeSurface(msg.position, msg.resolution);
+    fillInterior(grid, msg.position);
 
     ctx.postMessage({ type: "progress", fraction: 0.6 } satisfies WorkerResponse);
     const components = detectVoidComponents(grid);
@@ -346,15 +354,13 @@ ctx.onmessage = (e: MessageEvent<WorkerRequest>) => {
   // which replaced the (often carefully computed, e.g. per-chain SES)
   // exterior with a single blocky remesh even though only interior voids
   // needed anything done to them. Instead, this builds a small "sealing"
-  // mesh per selected component (its own enclosing boundary, eroded 1
-  // voxel in — see buildSealPatchMesh) and returns just those patch
-  // triangles; the caller concatenates them onto the UNCHANGED original
-  // exterior geometry. The erosion margin is what makes this safe for a
-  // tunnel too, not just a cavity: a voxel right at a tunnel's opening to
-  // the outside always has a neighbor outside the tunnel's own voxel set,
-  // so it erodes away exactly like a cavity voxel next to the shell would.
+  // mesh per selected component (see buildSealPatchMesh: a cavity's seal
+  // overlaps its walls so the slicer fuses them; a tunnel's is pulled back
+  // from its walls) and returns just those patch triangles; the
+  // caller concatenates them onto the UNCHANGED original exterior geometry.
   ctx.postMessage({ type: "progress", fraction: 0.2 } satisfies WorkerResponse);
   const grid = voxelizeSurface(msg.position, msg.resolution);
+  fillInterior(grid, msg.position);
 
   ctx.postMessage({ type: "progress", fraction: 0.5 } satisfies WorkerResponse);
   const { components, reached } = detectVoidComponentsFull(grid);
@@ -372,18 +378,39 @@ ctx.onmessage = (e: MessageEvent<WorkerRequest>) => {
   // nearest to, rather than one flat color for the whole batch).
   const sealedIds: number[] = [];
   const sealedVertexCounts: number[] = [];
+  const cavitySeals: ComponentHighlightMesh[] = [];
+  const patches: ComponentHighlightMesh[] = [];
+
+  // Cavities enclosed by one chain are filled by deleting their inner
+  // surface instead of sealing them (see planInnerShellFills).
+  const { removedTriangles, filledByRemoval: fullyEnclosed } = planInnerShellFills(msg.position, grid, components, selectedIds);
+
   for (const c of components) {
     if (!selectedIds.has(c.id)) continue;
+    if (fullyEnclosed.has(c.id)) {
+      filledVoxelCount += c.voxelCount;
+      sealedCount++;
+      continue;
+    }
     const patch = buildSealPatchMesh(grid, c, sealCtx);
     if (!patch) {
       skippedCount++;
       continue;
     }
-    patchPositions.push(patch.position);
-    patchNormals.push(patch.normal);
+    if (c.kind === "cavity") cavitySeals.push(patch);
+    patches.push(patch);
     filledVoxelCount += c.voxelCount;
     sealedCount++;
     sealedIds.push(c.id);
+  }
+
+  // Close the slivers cavity seals leave against walls they can't overlap.
+  const removedMask = new Uint8Array(msg.position.length / 9);
+  for (const t of removedTriangles) removedMask[t] = 1;
+  snapSealsToWalls(cavitySeals, msg.position, grid.voxelSize, removedMask);
+  for (const patch of patches) {
+    patchPositions.push(patch.position);
+    patchNormals.push(patch.normal);
     sealedVertexCounts.push(patch.position.length / 3);
   }
 
@@ -399,7 +426,7 @@ ctx.onmessage = (e: MessageEvent<WorkerRequest>) => {
   }
 
   ctx.postMessage(
-    { type: "cavity-result", patchPosition, patchNormal, filledVoxelCount, sealedCount, skippedCount, sealedIds, sealedVertexCounts } satisfies WorkerResponse,
-    [patchPosition.buffer, patchNormal.buffer],
+    { type: "cavity-result", patchPosition, patchNormal, filledVoxelCount, sealedCount, skippedCount, sealedIds, sealedVertexCounts, removedTriangles } satisfies WorkerResponse,
+    [patchPosition.buffer, patchNormal.buffer, removedTriangles.buffer],
   );
 };

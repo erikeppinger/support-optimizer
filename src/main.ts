@@ -5,7 +5,7 @@ import { createAxesGizmo, disposeAxesGizmo, scaleAxesGizmo, positionAxesGizmoAtC
 import { enableModelDragAndDrop, placeOnBuildPlate, clipPlane, loadSTLFile, buildMeshFromGeometry, COMPARISON_MESH_MATERIAL, MESH_MATERIAL } from "./mesh/load-model";
 import { downloadMeshAsSTL } from "./mesh/export-stl";
 import { downloadMeshAs3MF, type Export3MFResult } from "./mesh/export-3mf";
-import { parse3MF, computeFlatNormals, MAX_PAINTED_COLORS } from "./mesh/threemf";
+import { parse3MF, computeFlatNormals, MAX_PAINTED_COLORS, CLOSE_GAPS_RADIUS_MM } from "./mesh/threemf";
 import {
   applyOverhangColors,
   applySubunitColorsWithOverhangHighlight,
@@ -195,7 +195,7 @@ app.innerHTML = `
       <summary>3. Voids &amp; cavities</summary>
       <div class="field-label"><label for="cavity-resolution">Void detection resolution:</label>${help(
         `Sets the voxel grid's resolution along the model's longest axis for detection — shared by both Cavities and Tunnels below, since they come from one flood-fill pass over the same grid. Higher finds smaller/thinner voids (including narrow pockets right at a subunit interface) and shapes their seal more precisely.<br><br>
-        Since Fill only adds sealing patches <em>inside</em> existing voids and never re-voxelizes the exterior, this has much lower stakes — it no longer affects the visible surface at all, only which tiny voids get found and how smooth their (invisible, interior) seal looks.`,
+        Fill never re-voxelizes the exterior, so this mostly decides which small voids get found and how smooth their seal is. One effect does reach the surface: a pocket joined to the outside only by a slit narrower than one voxel counts as enclosed, and filling it closes that slit too, up to about two voxels deep. Since a voxel is a fixed share of the model's size, that closure grows with print size — about 2% of the model's largest dimension at Medium (64³), half that at High (128³). For large prints, a higher resolution keeps the surface more faithful.`,
       )}</div>
       <select id="cavity-resolution">
         <option value="32">Low (32&sup3;)</option>
@@ -219,6 +219,7 @@ app.innerHTML = `
         </div>
         <button id="detect-cavities-btn" disabled>Find cavities</button>${help(
           `Voxelizes the surface, then flood-fills 6-connected empty space starting from a guaranteed-exterior corner voxel. A <strong>cavity</strong> is empty voxels the flood-fill never reaches — fully enclosed, including a pocket trapped between two touching subunits with no path out (a real print concern: any support material generated inside one is stuck there permanently once printed).<br><br>
+          Everything inside the model's surface counts as solid first — the same way a slicer merges a model's shells — so a chain's own interior, and the space where separately built chains overlap, are never listed. Only genuinely empty space is.<br><br>
           Find cavities and Find tunnels each run their own scan and only update their own list — finding tunnels never resets your cavity selection, and vice versa.`,
         )}
         <div class="void-row">
@@ -230,9 +231,10 @@ app.innerHTML = `
         </div>
         <div id="cavities-list"></div>
         <button id="apply-fill-cavities-btn" disabled>Fill selected cavities</button>${help(
-          `Adds a small sealing mesh for each selected cavity directly onto the existing exterior geometry. The exterior is <strong>never</strong> re-voxelized or touched — concatenating the two is already a valid union, no boolean/CSG merge needed, and the visible surface stays byte-identical.<br><br>
-          Unlike the on-model highlight (which shows the void's <em>full</em> detected extent), the seal is pulled back from the void's edge by a safety margin: right at a thin wall, the detection grid's idea of where the outside begins can be off by about a voxel, and a seal built exactly to that boundary could poke through the real surface.<br><br>
-          How much margin depends on where the cavity sits. One buried at least 2 voxels from the outside is sealed to its full extent — a seal there can't reach the surface. One that may lie close to the outside gets the largest margin that still leaves something to seal (1 voxel, then ¾, ½, ¼, and finally none). In practice every selected cavity gets sealed.`,
+          `Fills each selected cavity without touching the visible exterior — it is <strong>never</strong> re-voxelized, and the outer surface stays byte-identical.<br><br>
+          A cavity inside a single chain is bounded by that chain's own surface: a closed inner skin in the mesh. Fill deletes that skin, so the pocket becomes solid exactly, with nothing added.<br><br>
+          A cavity closed off between chains has no skin of its own, and neither does any part of a cavity that reaches past its skin through a wall thinner than a voxel. These get a small sealing mesh instead. The seal fills the pocket and reaches about 2 detection voxels into the solid around it, so the slicer merges seal and walls into one solid — no gap that would leave it as a loose plug inside its pocket.<br><br>
+          The overlap only grows into material at least 2 voxels from the open outside, which keeps it clear of the outer surface. Where such a pocket sits right under a thin outer wall, the overlap stops short there; the seal's surface is then pulled onto the wall itself, just far enough past it to fuse. At a pocket's narrow tip a pinhole of a few tenths of a millimetre can remain — <strong>Close gaps narrower than the nozzle</strong> under Export takes care of it in PrusaSlicer. Bits of overlap that would end up cut off from the rest of the seal are left out, so nothing exports as a loose speck; a pocket of only a few voxels right at the outer surface has nothing to anchor to and is skipped.`,
         )}
       </div>
       <div class="void-group">
@@ -244,7 +246,7 @@ app.innerHTML = `
         )}
         <div id="tunnels-list"></div>
         <button id="apply-fill-tunnels-btn" disabled>Fill selected tunnels</button>${help(
-          `Builds seals the same way as Fill selected cavities, with the exterior left byte-identical — except that a tunnel always keeps the full 1-voxel margin, never less. A tunnel thinner than about 3 detection voxels has nothing left after that margin and is skipped; raise the detection resolution and find tunnels again to seal it. Nothing is pre-selected; check the ones you want sealed first.`,
+          `Adds a seal for each selected tunnel, with the exterior left byte-identical. Unlike a cavity seal, a tunnel's seal is pulled back 1 voxel from its walls instead of reaching into them, so it isn't fused with them — in the slicer it can come out as a separate plug inside the channel. A tunnel thinner than about 3 detection voxels has nothing left after that margin and is skipped; raise the detection resolution and find tunnels again to seal it. Nothing is pre-selected; check the ones you want sealed first.`,
         )}
       </div>
     </details>
@@ -332,6 +334,22 @@ or to whatever surface occludes it first)</span>
         Colors follow what's on screen: with subunit colors showing, one color per chain — the overhang highlight is left out on purpose, so it can't paint part of a chain onto another extruder. With overhang colors showing, the two overhang colors are painted instead. A 3MF you imported keeps its own colors.<br><br>
         Slicer painting has codes for at most ${MAX_PAINTED_COLORS} colors. Beyond that, each color is saved as its own part instead, and slicers will report open edges where the parts meet.`,
       )}
+      <div class="void-row">
+        <input type="checkbox" id="color-through" checked />
+        <label for="color-through">Color each chain all the way through (PrusaSlicer)</label>${help(
+          `Painting only colors a model's surface; the slicer decides how deep each color goes. PrusaSlicer limits that with <strong>Maximum width of a segmented region</strong> (Print Settings → Multiple Extruders → Advanced). Its own default is 0, no limit, but Prusa's current profiles for the MK4/MK4S, Core One and XL — the printers that take an MMU3 or several toolheads — set it to 5 mm. Deeper than that, the inside of a chain is printed as a separate region in another extruder's color, with walls of its own around it. You see it in the sliced preview as chains whose inside doesn't match their outside.<br><br>
+          With this on, the exported 3MF sets that width to 0 for this model, so each chain is its own color all the way through. On a four-chain test model sliced for the XL, that cut the walls PrusaSlicer printed by more than a third. It applies only to this model and overrides your print profile's value for it; you can still change it per object in PrusaSlicer.<br><br>
+          With it off, the file leaves the setting to your profile. Other slicers ignore this entry. OrcaSlicer's printer profiles all keep the same setting at 0, so chains there are colored through already; Bambu Studio's profiles don't set it — if a chain's inside comes out in another color there, look for the same setting by name. Only applies to painted exports (up to ${MAX_PAINTED_COLORS} colors).`,
+        )}
+      </div>
+      <div class="void-row">
+        <input type="checkbox" id="close-gaps" checked />
+        <label for="close-gaps">Close gaps narrower than the nozzle (PrusaSlicer)</label>${help(
+          `Sets PrusaSlicer's <strong>Slice gap closing radius</strong> (Print Settings → Advanced → Slicing) to ${CLOSE_GAPS_RADIUS_MM} mm for this model, instead of its default 0.049 mm. Each layer then closes any gap narrower than ${CLOSE_GAPS_RADIUS_MM * 2} mm — narrower than a 0.4 mm nozzle could print anyway.<br><br>
+          It matters after filling cavities. A seal fills its pocket almost to the wall, but at a pocket's narrow tip it can leave a pinhole a few tenths of a millimetre wide. PrusaSlicer prints such a pinhole as a tiny closed pocket with walls of its own, and if you look at the sliced layers it shows up as a small loose-looking ring. Closing gaps that narrow removes them.<br><br>
+          It also closes equally narrow slits in the outer surface, and adds a little print time — about 1% on a test print. It applies only to this model and overrides your print profile's value for it. Other slicers ignore this entry; OrcaSlicer and Bambu Studio have a setting of the same name. Only applies to exports of up to ${MAX_PAINTED_COLORS} colors.`,
+        )}
+      </div>
     </details>
 
     <details id="section-log">
@@ -413,6 +431,8 @@ const showSubunitColorsEl = document.querySelector<HTMLInputElement>("#show-subu
 const chainPaletteSelectEl = document.querySelector<HTMLSelectElement>("#chain-palette-select")!;
 const chainLegendEl = document.querySelector<HTMLDivElement>("#chain-legend")!;
 const export3mfBtnEl = document.querySelector<HTMLButtonElement>("#export-3mf-btn")!;
+const colorThroughEl = document.querySelector<HTMLInputElement>("#color-through")!;
+const closeGapsEl = document.querySelector<HTMLInputElement>("#close-gaps")!;
 
 const sceneSetup = setupScene(viewerEl);
 const { scene, camera, controls, buildPlate } = sceneSetup;
@@ -2069,8 +2089,8 @@ function runFill(kind: "cavity" | "tunnel", selectedIds: Set<number>) {
   }
 
   const geometry = currentMesh.geometry;
-  const position = (geometry.attributes.position.array as Float32Array).slice();
-  const normal = geometry.attributes.normal.array as Float32Array;
+  let position = (geometry.attributes.position.array as Float32Array).slice();
+  let normal = geometry.attributes.normal.array as Float32Array;
   const triCount = position.length / 9;
   // evaluateOrientationCost is O(triangles²), on the main thread here —
   // skip it above the limit rather than freeze the tab computing a
@@ -2099,12 +2119,34 @@ function runFill(kind: "cavity" | "tunnel", selectedIds: Set<number>) {
 
     pushUndo("fill");
 
+    // Cavities enclosed by one chain are filled by deleting their inner
+    // surface (see the worker); drop those triangles from every per-vertex
+    // array first. Everything else stays byte-for-byte.
+    if (msg.removedTriangles.length > 0) {
+      const removed = new Uint8Array(position.length / 9);
+      for (const t of msg.removedTriangles) removed[t] = 1;
+      const keepVertex = (v: number) => removed[Math.floor(v / 3)] === 0;
+      const keepFloats = (a: Float32Array, stride: number) => {
+        const out = new Float32Array(a.length - msg.removedTriangles.length * 3 * stride);
+        let o = 0;
+        for (let v = 0; v < a.length / stride; v++) {
+          if (!keepVertex(v)) continue;
+          for (let k = 0; k < stride; k++) out[o++] = a[v * stride + k];
+        }
+        return out;
+      };
+      position = keepFloats(position, 3);
+      normal = keepFloats(normal, 3);
+      if (subunitColor) subunitColor = keepFloats(subunitColor, 3);
+      if (subunitChainIndex) subunitChainIndex = subunitChainIndex.filter((_, v) => keepVertex(v));
+    }
+
     // Merge the new interior sealing patches onto the EXISTING exterior
     // arrays — `position`/`normal` (captured above, before the request
-    // was sent) are untouched by whatever happened in the worker, so the
-    // exterior survives byte-for-byte. A patch's own boundary is by
-    // construction strictly inside the solid it seals, so this
-    // concatenation is already a valid union — no welding needed.
+    // was sent) are otherwise untouched by whatever happened in the
+    // worker. A patch's own boundary is by construction strictly inside
+    // the solid it seals, so this concatenation is already a valid union —
+    // no welding needed.
     const mergedPosition = new Float32Array(position.length + msg.patchPosition.length);
     mergedPosition.set(position, 0);
     mergedPosition.set(msg.patchPosition, position.length);
@@ -2179,9 +2221,11 @@ function runFill(kind: "cavity" | "tunnel", selectedIds: Set<number>) {
 
     const patchTriCount = msg.patchPosition.length / 9;
     const skippedNote = msg.skippedCount > 0
-      ? ` (${msg.skippedCount} skipped — too thin at this detection resolution to seal without risking a protrusion; try a higher detection resolution.)`
+      ? kind === "cavity"
+        ? ` (${msg.skippedCount} skipped — pockets of a few voxels at most, right at the outer surface, with no wall to anchor a seal to.)`
+        : ` (${msg.skippedCount} skipped — too thin at this detection resolution to seal without risking a protrusion; try a higher detection resolution.)`
       : "";
-    const sealedLabel = `Sealed ${msg.sealedCount} ${pluralVoidWord(kind, msg.sealedCount)} (${msg.filledVoxelCount.toLocaleString()} voxels, +${patchTriCount.toLocaleString()} interior triangles) — exterior surface unchanged.${skippedNote}`;
+    const sealedLabel = `Sealed ${msg.sealedCount} ${pluralVoidWord(kind, msg.sealedCount)} (${msg.filledVoxelCount.toLocaleString()} voxels, +${patchTriCount.toLocaleString()} interior triangles${msg.removedTriangles.length > 0 ? `, ${(msg.removedTriangles.length).toLocaleString()} inner-surface triangles removed` : ""}) — exterior surface unchanged.${skippedNote}`;
     const fillStatus = beforeCost !== null && afterCost !== null
       ? `${sealedLabel} Cost ${beforeCost.toFixed(1)} → ${afterCost.toFixed(1)}`
       : sealedLabel;
@@ -2266,7 +2310,7 @@ export3mfBtnEl.addEventListener("click", async () => {
   }
   let result: Export3MFResult;
   try {
-    result = await downloadMeshAs3MF(currentMesh, filename, baseHeightMm);
+    result = await downloadMeshAs3MF(currentMesh, filename, baseHeightMm, colorThroughEl.checked, closeGapsEl.checked);
   } finally {
     if (liveColorAttr) currentMesh.geometry.setAttribute("color", liveColorAttr);
   }
@@ -2274,7 +2318,7 @@ export3mfBtnEl.addEventListener("click", async () => {
   const raised = baseHeightMm > 0 ? ` (base raised to Z=${baseHeightMm.toFixed(2)}mm)` : "";
   const how = result.mode === "painted"
     ? result.colorCount > 1
-      ? ` — one closed mesh, ${result.colorCount} colors painted onto extruders 1–${result.colorCount}`
+      ? ` — one closed mesh, ${result.colorCount} colors painted onto extruders 1–${result.colorCount}${colorThroughEl.checked ? ", each colored all the way through" : ""}${closeGapsEl.checked ? `, gaps under ${CLOSE_GAPS_RADIUS_MM * 2} mm closed` : ""}`
       : ""
     : ` — more than ${MAX_PAINTED_COLORS} colors, so each color is its own part; slicers will report open edges where parts meet`;
   const exportStatus = `Exported ${filename}${raised}${how}`;

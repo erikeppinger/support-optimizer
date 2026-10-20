@@ -148,3 +148,61 @@ export function voxelizeSurface(position: Float32Array, targetResolution: number
 
   return grid;
 }
+
+/**
+ * Marks every voxel whose center lies inside the surface as solid, using the
+ * nonzero winding rule slicers use to merge a model's shells: a ray along +x
+ * from each voxel row counts surfaces entered (+1) and left (−1). voxelizeSurface
+ * alone marks only voxels the surface passes through, which leaves a model's
+ * own interior — and the overlap between separately meshed chains — looking
+ * like enclosed empty space. After this, empty enclosed voxels are only real
+ * voids: cavities inside a chain and pockets between chains.
+ */
+export function fillInterior(grid: VoxelGrid, position: Float32Array): void {
+  const { nx, ny, nz, voxelSize, origin, solid } = grid;
+  // Rays run through voxel centers, nudged off the exact center so they
+  // don't graze triangle edges/vertices that sit on the same lattice.
+  const nudge = voxelSize * 1e-3;
+  const crossings: { x: number; s: number }[][] = Array.from({ length: ny * nz }, () => []);
+
+  const triCount = position.length / 9;
+  for (let f = 0; f < triCount; f++) {
+    const o = f * 9;
+    const ax = position[o], ay = position[o + 1], az = position[o + 2];
+    const bx = position[o + 3], by = position[o + 4], bz = position[o + 5];
+    const cx = position[o + 6], cy = position[o + 7], cz = position[o + 8];
+    // Projected (y, z) area, doubled; its sign is the facing along x.
+    const d = (by - ay) * (cz - az) - (bz - az) * (cy - ay);
+    if (d === 0) continue;
+    const iy0 = Math.max(0, Math.ceil((Math.min(ay, by, cy) - origin.y - nudge) / voxelSize - 0.5));
+    const iy1 = Math.min(ny - 1, Math.floor((Math.max(ay, by, cy) - origin.y - nudge) / voxelSize - 0.5));
+    const iz0 = Math.max(0, Math.ceil((Math.min(az, bz, cz) - origin.z - 2 * nudge) / voxelSize - 0.5));
+    const iz1 = Math.min(nz - 1, Math.floor((Math.max(az, bz, cz) - origin.z - 2 * nudge) / voxelSize - 0.5));
+    for (let iz = iz0; iz <= iz1; iz++) {
+      const pz = origin.z + (iz + 0.5) * voxelSize + 2 * nudge;
+      for (let iy = iy0; iy <= iy1; iy++) {
+        const py = origin.y + (iy + 0.5) * voxelSize + nudge;
+        const u = ((py - ay) * (cz - az) - (pz - az) * (cy - ay)) / d;
+        const v = ((by - ay) * (pz - az) - (bz - az) * (py - ay)) / d;
+        if (u < 0 || v < 0 || u + v > 1) continue;
+        // Outward normal pointing −x means the ray enters the solid here.
+        crossings[iz * ny + iy].push({ x: ax + u * (bx - ax) + v * (cx - ax), s: d > 0 ? -1 : 1 });
+      }
+    }
+  }
+
+  for (let iz = 0; iz < nz; iz++) {
+    for (let iy = 0; iy < ny; iy++) {
+      const row = crossings[iz * ny + iy];
+      if (row.length === 0) continue;
+      row.sort((a, b) => a.x - b.x);
+      let w = 0;
+      let k = 0;
+      for (let ix = 0; ix < nx; ix++) {
+        const cxv = origin.x + (ix + 0.5) * voxelSize;
+        while (k < row.length && row[k].x < cxv) w += row[k++].s;
+        if (w !== 0) solid[voxelIndex(grid, ix, iy, iz)] = 1;
+      }
+    }
+  }
+}

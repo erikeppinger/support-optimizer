@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
 import { zipSync, strToU8, unzipSync, strFromU8 } from "fflate";
-import { parse3MF, build3MF, buildPainted3MF, paintPalette, computeFlatNormals, MAX_PAINTED_COLORS } from "./threemf";
+import { parse3MF, build3MF, buildPainted3MF, paintPalette, computeFlatNormals, MAX_PAINTED_COLORS, CLOSE_GAPS_RADIUS_MM } from "./threemf";
 import { weldGeometryForExport } from "./weld-geometry";
 
 const CORE_NS = "http://schemas.microsoft.com/3dmanufacturing/core/2015/02";
@@ -212,6 +212,20 @@ describe("buildPainted3MF", () => {
     const { welded, triColors } = twoColorSquare();
     const config = strFromU8(unzipSync(new Uint8Array(buildPainted3MF(welded, triColors)))["Metadata/Slic3r_PE_model.config"]);
     expect(config).toContain('firstid="0" lastid="1"');
+  });
+
+  it("sets PrusaSlicer's segmented region width to 0 only when asked", () => {
+    const { welded, triColors } = twoColorSquare();
+    const configOf = (buffer: ArrayBuffer) => strFromU8(unzipSync(new Uint8Array(buffer))["Metadata/Slic3r_PE_model.config"]);
+    expect(configOf(buildPainted3MF(welded, triColors, true))).toContain('key="mmu_segmented_region_max_width" value="0"');
+    expect(configOf(buildPainted3MF(welded, triColors))).not.toContain("mmu_segmented_region_max_width");
+  });
+
+  it("sets PrusaSlicer's slice gap closing radius only when asked", () => {
+    const { welded, triColors } = twoColorSquare();
+    const configOf = (buffer: ArrayBuffer) => strFromU8(unzipSync(new Uint8Array(buffer))["Metadata/Slic3r_PE_model.config"]);
+    expect(configOf(buildPainted3MF(welded, triColors, false, true))).toContain(`key="slice_closing_radius" value="${CLOSE_GAPS_RADIUS_MM}"`);
+    expect(configOf(buildPainted3MF(welded, triColors))).not.toContain("slice_closing_radius");
   });
 
   it("round-trips through parse3MF with each triangle's color intact", () => {

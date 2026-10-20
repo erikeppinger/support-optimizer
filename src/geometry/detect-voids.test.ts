@@ -73,11 +73,7 @@ describe("buildSealPatchMesh", () => {
     return grid;
   }
 
-  it("seals a thin (1-voxel-thick) cavity buried deep inside the model, which the old fixed erosion could never seal", () => {
-    // A 30-voxel block with the thin slab at its exact vertical center —
-    // many voxels of solid material separate it from the exterior on
-    // every side, so it should be classified "far from exterior" and
-    // sealed at full extent (margin 0) immediately.
+  it("seals a thin (1-voxel-thick) cavity buried deep inside the model", () => {
     const grid = buildBlockWithThinSlabCavity(30, 18);
     const { components, reached } = detectVoidComponentsFull(grid);
     const cavity = components.find((c) => c.kind === "cavity");
@@ -89,11 +85,8 @@ describe("buildSealPatchMesh", () => {
     expect(patch!.position.length).toBeGreaterThan(0);
   });
 
-  it("still seals a thin cavity close to the exterior, via the fractional-margin fallback ladder", () => {
-    // Same thin slab shape, but only 2 voxels of solid wall away from
-    // open air on one side — "risky" by proximity, not "far from
-    // exterior", so this exercises the margin ladder instead of the
-    // immediate zero-margin shortcut, and should still succeed.
+  it("still seals a thin cavity close to the exterior", () => {
+    // Only 2 voxels of solid wall away from open air on one side.
     const grid = buildBlockWithThinSlabCavity(10, 5);
     const { components, reached } = detectVoidComponentsFull(grid);
     const cavity = components.find((c) => c.kind === "cavity");
@@ -127,5 +120,45 @@ describe("buildSealPatchMesh", () => {
     const ctx = buildSealContext(grid, reached);
     const patch = buildSealPatchMesh(grid, channelTunnel, ctx);
     expect(patch).toBeNull();
+  });
+
+  /** Bounding box of a seal mesh, in voxel units (voxelSize 1, origin 0). */
+  function bounds(position: Float32Array) {
+    const min = [Infinity, Infinity, Infinity], max = [-Infinity, -Infinity, -Infinity];
+    for (let i = 0; i < position.length; i += 3) {
+      for (let d = 0; d < 3; d++) {
+        min[d] = Math.min(min[d], position[i + d]);
+        max[d] = Math.max(max[d], position[i + d]);
+      }
+    }
+    return { min, max };
+  }
+
+  it("reaches into the solid around a cavity, so the slicer fuses seal and walls", () => {
+    // Cavity occupying voxels 13..16 in a block spanning 3..26.
+    const grid = makeGrid(30);
+    setBox(grid, 3, 26, 3, 26, 3, 26, 1);
+    setBox(grid, 13, 16, 13, 16, 13, 16, 0);
+    const { components, reached } = detectVoidComponentsFull(grid);
+    const cavity = components.find((c) => c.kind === "cavity")!;
+    const { min, max } = bounds(buildSealPatchMesh(grid, cavity, buildSealContext(grid, reached))!.position);
+    // The cavity's own voxels span 13..17 in space; the seal goes ~2 further.
+    for (let d = 0; d < 3; d++) {
+      expect(min[d]).toBeLessThan(12);
+      expect(max[d]).toBeGreaterThan(18);
+    }
+  });
+
+  it("never grows a seal into the solid next to the outer surface", () => {
+    // Cavity right under the top of the block: voxels at z=24..25, block to z=26.
+    const grid = makeGrid(30);
+    setBox(grid, 3, 26, 3, 26, 3, 26, 1);
+    setBox(grid, 12, 16, 12, 16, 24, 25, 0);
+    const { components, reached } = detectVoidComponentsFull(grid);
+    const cavity = components.find((c) => c.kind === "cavity")!;
+    const { max } = bounds(buildSealPatchMesh(grid, cavity, buildSealContext(grid, reached))!.position);
+    // The block's outer face is at z=27; the last voxel layer (z=26) borders
+    // open air, so the seal must stop below it.
+    expect(max[2]).toBeLessThanOrEqual(26.5);
   });
 });

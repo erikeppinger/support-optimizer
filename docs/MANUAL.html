@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Support Optimizer Manual</title>
-<meta name="description" content="Manual and tutorial for Support Optimizer v1.0.11: loading structures, sealing voids, optimizing print orientation, and exporting.">
+<meta name="description" content="Manual and tutorial for Support Optimizer v1.0.12: loading structures, sealing voids, optimizing print orientation, and exporting.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -422,7 +422,7 @@
 
 <div class="shell">
   <nav class="sidebar" id="sidebar">
-    <div class="sidebar-brand"><span class="mark">v1.0.11</span><span class="name">Support Optimizer</span></div>
+    <div class="sidebar-brand"><span class="mark">v1.0.12</span><span class="name">Support Optimizer</span></div>
     <div class="sidebar-sub">Manual &amp; tutorial</div>
 
     <div class="navgroup">
@@ -452,7 +452,7 @@
   <main>
     <div class="content">
 
-      <div class="eyebrow">Documentation &middot; v1.0.11</div>
+      <div class="eyebrow">Documentation &middot; v1.0.12</div>
       <h1 class="title">Support Optimizer</h1>
       <p class="lede">A tool for turning a molecular structure — or any mesh — into something ready to 3D print: it builds or imports the surface, finds and seals interior cavities, searches for the orientation that needs the least support material, and exports a multi-material file a slicer can use.</p>
 
@@ -668,7 +668,7 @@ To target size:     f = target / (current size along the chosen axis)</div>
         <div class="ref-badge-row"><div class="ref-badge">3</div><h2 class="section-title" style="border:none;padding:0;margin:0;">Voids &amp; cavities</h2></div>
         <p class="section-kicker">Finding and closing interior empty space, before it becomes trapped support material.</p>
 
-        <p>Detection works by voxelizing the current surface, then flood-filling outward from a point guaranteed to be outside the model. Every disconnected pocket of empty space it finds is one of two kinds:</p>
+        <p>Detection works by voxelizing the current model, then flood-filling outward from a point guaranteed to be outside it. Everything inside the model's surface counts as solid — the same way a slicer merges a model's shells — so a chain's own interior, and the space where separately built chains overlap, are never mistaken for voids. Every disconnected pocket of genuinely empty space it finds is one of two kinds:</p>
         <ul>
           <li><strong>Cavity</strong> &mdash; empty voxels the flood-fill never reaches. Fully enclosed, including a pocket trapped between two touching subunits with no path out.</li>
           <li><strong>Tunnel</strong> &mdash; empty voxels the flood-fill <em>does</em> reach, but that still sit within the model's own bounds. An open channel through the part, most often along a subunit seam that never fully closes.</li>
@@ -676,28 +676,25 @@ To target size:     f = target / (current size along the chosen axis)</div>
         <p>Cavities and tunnels each have their own Find button, list and Fill button. Finding one kind leaves the other list and its selection untouched.</p>
 
         <h4 class="control-title">Void detection resolution</h4>
-        <p>The voxel grid resolution detection runs at, shared by both lists. Higher finds smaller and thinner voids — including narrow interface pockets — and shapes their seal more precisely. Since filling only ever adds material <em>inside</em> a void and never re-voxelizes the visible exterior, this setting has no effect on the surface you actually see; it only changes which voids get found.</p>
+        <p>The voxel grid resolution detection runs at, shared by both lists. Higher finds smaller and thinner voids — including narrow interface pockets — and shapes their seal more precisely. Fill never re-voxelizes the visible exterior, so this setting mostly decides which voids get found. One effect does reach the surface: a pocket joined to the outside only by a slit narrower than one voxel counts as enclosed, and filling it closes that slit too, up to about two voxels deep. Since a voxel is a fixed share of the model's size, that closure grows with print size — about 2% of the model's largest dimension at Medium (64³), half that at High (128³). For large prints, a higher resolution keeps the surface more faithful.</p>
 
         <h3 class="sub-title"><span class="swatch" style="background:var(--cavity)"></span>Cavities</h3>
         <p>Fully enclosed pockets. Every one found starts pre-checked for filling by default — turn on <strong>Custom auto-select size limit</strong> to instead pre-check only cavities at or under a voxel-count threshold you choose, hand-tuning individual boxes in the list afterward either way.</p>
 
         <h4 class="control-title">Fill selected cavities</h4>
-        <p>Adds a small sealing mesh for each selected cavity directly onto the existing exterior — the exterior itself is <strong>never</strong> re-voxelized, so the visible surface stays byte-identical.</p>
+        <p>Fills each selected cavity without touching the visible exterior — it is <strong>never</strong> re-voxelized, so the outer surface stays byte-identical.</p>
+        <p>A cavity inside a single chain is bounded by that chain's own surface: a closed inner skin in the mesh. Fill deletes that skin, so the pocket becomes solid exactly, with nothing added.</p>
         <div class="callout">
-          <div class="callout-label">How deep a seal goes</div>
-          <p>Right at a thin wall, the detection grid's idea of where the outside begins can be off by about a voxel, so a seal built exactly to the detected boundary could poke through the real surface. To prevent that, the seal is pulled back from the void's edge by a safety margin — and the margin depends on where the void sits:</p>
-          <ul>
-            <li><strong>A cavity buried at least 2 voxels from the outside</strong> is sealed to its full extent, with no margin. A seal there can't reach the surface.</li>
-            <li><strong>A cavity that may lie close to the outside</strong> is sealed with the largest margin that still leaves something to seal: 1 voxel, then &frac34;, &frac12;, &frac14;, and finally none.</li>
-          </ul>
-          <p>In practice every selected cavity now gets sealed. (Before v1.0.6 a fixed one-voxel margin applied everywhere, and most thin cavities were skipped as "too thin to seal.")</p>
+          <div class="callout-label">How a seal joins the subunit</div>
+          <p>A cavity closed off between chains has no skin of its own, and neither does any part of a cavity that reaches past its skin through a wall thinner than a voxel. These get a small sealing mesh instead. The seal fills the pocket and reaches about 2 detection voxels into the solid around it. The slicer merges overlapping solids, so the pocket becomes part of the subunits around it — one continuous solid, with no gap that would leave the seal as a loose plug inside its pocket.</p>
+          <p>The overlap only grows into material at least 2 voxels from the open outside, which keeps it clear of the outer surface. Where such a pocket sits right under a thin outer wall, the overlap stops short there; the seal's surface is then pulled onto the wall itself, just far enough past it to fuse. At a pocket's narrow tip a pinhole of a few tenths of a millimetre can remain — <strong>Close gaps narrower than the nozzle</strong> under Export takes care of it in PrusaSlicer. Bits of overlap that would end up cut off from the rest of the seal are left out, so nothing exports as a loose speck; a pocket of only a few voxels right at the outer surface has nothing to anchor to and is skipped.</p>
         </div>
 
         <h3 class="sub-title"><span class="swatch" style="background:var(--tunnel)"></span>Tunnels</h3>
         <p>Open channels. Nothing is pre-selected here — filling a tunnel removes an open channel entirely, a bigger geometric decision than sealing a buried pocket, so review each one's voxel count and rough volume before checking it.</p>
 
         <h4 class="control-title">Fill selected tunnels</h4>
-        <p>Builds seals the same way, with one difference: a tunnel always keeps the full one-voxel margin. A tunnel by definition has a real opening to the outside, and sealing it with no margin could close that opening over. The margin pulls the seal back from the opening instead. A tunnel thinner than about three voxels has nothing left after that margin and is skipped — raise the detection resolution and find tunnels again to seal it.</p>
+        <p>Adds a seal for each selected tunnel, but pulled back one voxel from the tunnel's walls instead of reaching into them, so it isn't fused with them: in the slicer it can come out as a separate plug inside the channel. A tunnel thinner than about three voxels has nothing left after that margin and is skipped — raise the detection resolution and find tunnels again to seal it.</p>
 
         <div class="callout warn">
           <div class="callout-label">Oversized voids are refused</div>
@@ -756,6 +753,14 @@ To target size:     f = target / (current size along the chosen axis)</div>
         <p>Saves the model as one closed mesh with each color <strong>painted</strong> onto its own extruder — the same per-triangle painting PrusaSlicer, Bambu Studio and OrcaSlicer write with their own multi-material paint tools. The slicer opens it as a single part with no open edges: the first color on extruder 1, the second on extruder 2, and so on. Reassign extruders in the slicer if needed.</p>
         <p>Colors follow what's on screen: with subunit colors showing, one color per chain — the overhang marking is left out on purpose so it can't paint part of a chain onto another extruder. With overhang colors showing instead, the two overhang colors are painted. A 3MF you imported keeps its own colors.</p>
         <p>Slicer painting has codes for at most 15 colors. Beyond that, each color is saved as its own part instead, and slicers will report open edges where the parts meet.</p>
+
+        <h4 class="control-title">Color each chain all the way through (PrusaSlicer)</h4>
+        <p>Painting only colors a model's surface; the slicer decides how deep each color goes. PrusaSlicer limits that with <strong>Maximum width of a segmented region</strong> (Print Settings → Multiple Extruders → Advanced). Its own default is 0, no limit, but Prusa's current profiles for the MK4/MK4S, Core One and XL — the printers that take an MMU3 or several toolheads — set it to 5 mm. Deeper than that, the inside of a chain is printed as a separate region in another extruder's color, with walls of its own around it — in the sliced preview, chains whose inside doesn't match their outside.</p>
+        <p>On by default. The exported 3MF then sets that width to 0 for this model, so each chain is its own color all the way through. On a four-chain test model sliced for the XL, that cut the walls PrusaSlicer printed by more than a third. It applies only to this model and overrides your print profile's value for it; you can still change it per object in PrusaSlicer. Turned off, the file leaves the setting to your profile. Other slicers ignore this entry. OrcaSlicer's printer profiles all keep the same setting at 0, so chains there are colored through already; Bambu Studio's profiles don't set it — if a chain's inside comes out in another color there, look for the same setting by name. It only applies to painted exports (up to 15 colors).</p>
+
+        <h4 class="control-title">Close gaps narrower than the nozzle (PrusaSlicer)</h4>
+        <p>On by default. Sets PrusaSlicer's <strong>Slice gap closing radius</strong> (Print Settings → Advanced → Slicing) to 0.2 mm for this model, instead of its default 0.049 mm, so each layer closes any gap narrower than 0.4 mm — narrower than a 0.4 mm nozzle could print anyway.</p>
+        <p>It matters after filling cavities. A seal fills its pocket almost to the wall, but at a pocket's narrow tip it can leave a pinhole a few tenths of a millimetre wide, which PrusaSlicer prints as a tiny closed pocket with walls of its own — a small loose-looking ring in the sliced layers. Closing gaps that narrow removes them. It also closes equally narrow slits in the outer surface and adds a little print time, about 1% on a test print. It applies only to this model and overrides your print profile's value for it. Other slicers ignore this entry; OrcaSlicer and Bambu Studio have a setting of the same name. It applies to exports of up to 15 colors.</p>
       </section>
 
       <!-- ============ CONCEPTS ============ -->
@@ -785,8 +790,8 @@ To target size:     f = target / (current size along the chosen axis)</div>
             <dd>Both are "voids" &mdash; disconnected pockets of empty space a flood-fill finds inside the model. A cavity is one the flood-fill can never escape from (fully enclosed); a tunnel is one it can (an open channel to the outside somewhere). See <a href="#ref-3">Voids &amp; cavities</a> for how each gets handled.</dd>
           </div>
           <div class="glossary-term">
-            <dt>Seal margin</dt>
-            <dd>How far a seal is pulled back from a void's detected edge, so it can't poke through the real surface where the detection grid misjudged a thin wall. It's measured as a true straight-line distance (a Euclidean distance transform), so it can be a fraction of a voxel. Cavities buried well inside get no margin; cavities near the outside get the largest margin that still leaves something to seal; tunnels always keep one voxel. See the callout under <a href="#ref-3">Fill selected cavities</a>.</dd>
+            <dt>Seal overlap</dt>
+            <dd>How far a cavity's seal reaches into the solid around it (about 2 detection voxels), so the slicer fuses seal and walls into one solid. It never grows into material within 2 voxels of the open outside, which keeps it clear of the outer surface. Tunnels are the exception: their seals are pulled back one voxel from the walls and aren't fused with them. See the callout under <a href="#ref-3">Fill selected cavities</a>.</dd>
           </div>
           <div class="glossary-term">
             <dt>Orientation cost</dt>
@@ -862,7 +867,7 @@ To target size:     f = target / (current size along the chosen axis)</div>
       </section>
 
       <footer class="docfoot">
-        Support Optimizer &middot; manual updated for v1.0.11. If this page and an in-app "?" help panel ever disagree, the in-app text is closer to the running code.
+        Support Optimizer &middot; manual updated for v1.0.12. If this page and an in-app "?" help panel ever disagree, the in-app text is closer to the running code.
       </footer>
 
     </div>
