@@ -11,7 +11,54 @@ on:
       - "v*"
 
 jobs:
+  # The draft is created once, before the builds. Letting each build create
+  # it raced at v1.0.12: two builds each made their own draft and the
+  # installers were split between them.
+  create-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      release_id: ${{ steps.create.outputs.result }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create the draft release
+        id: create
+        uses: actions/github-script@v7
+        env:
+          # Update this before tagging each release — see the assets
+          # below to download and install for your platform.
+          RELEASE_BODY: |
+            - Filled cavities now become part of the subunit around them. A cavity inside one chain is filled exactly, by removing its inner skin; a pocket between chains gets a seal that reaches slightly into the surrounding walls. Either way the slicer prints one continuous solid instead of a loose plug inside its pocket.
+            - Find cavities lists only genuinely empty space. A chain's own inside, and the overlap between neighboring chains, were showing up as cavities and getting an extra inner skin when filled.
+            - 3MF export has a new option, on by default: color each chain all the way through in PrusaSlicer. Prusa's current profiles for the MK4/MK4S, Core One and XL carry painted colors only 5 mm into the model, so the inside of a chain came out in another extruder's color, with extra walls around it. OrcaSlicer's profiles keep that limit off.
+            - Filled cavities print as solid material without tiny leftover pockets: seals now reach the real cavity walls, and a new 3MF export option, on by default, has PrusaSlicer close gaps narrower than the nozzle.
+        with:
+          # A personal access token, not the built-in GITHUB_TOKEN: since
+          # 2026-10-01 the built-in one is refused when creating the release
+          # ("Resource not accessible by integration") despite contents: write.
+          github-token: ${{ secrets.RELEASE_TOKEN }}
+          script: |
+            const version = require(`${process.env.GITHUB_WORKSPACE}/src-tauri/tauri.conf.json`).version;
+            const tag = `v${version}`;
+            // Reuse a draft that already exists for this tag (a re-run)
+            // rather than adding a second one.
+            const releases = await github.paginate(github.rest.repos.listReleases, context.repo);
+            const existing = releases.find((r) => r.tag_name === tag && r.draft);
+            if (existing) return existing.id;
+            const { data } = await github.rest.repos.createRelease({
+              ...context.repo,
+              tag_name: tag,
+              name: `Support Optimizer ${tag}`,
+              body: process.env.RELEASE_BODY,
+              draft: true,
+              prerelease: false,
+            });
+            return data.id;
+
   release:
+    needs: create-release
     permissions:
       contents: write
     strategy:
@@ -50,23 +97,10 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
-      - name: Build and release
+      - name: Build and upload to the draft
         uses: tauri-apps/tauri-action@v0
         env:
-          # A personal access token, not the built-in GITHUB_TOKEN: since
-          # 2026-10-01 the built-in one is refused when creating the release
-          # ("Resource not accessible by integration") despite contents: write.
           GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         with:
-          tagName: v__VERSION__
-          releaseName: "Support Optimizer v__VERSION__"
-          # Update this before tagging each release — see the assets
-          # below to download and install for your platform.
-          releaseBody: |
-            - Filled cavities now become part of the subunit around them. A cavity inside one chain is filled exactly, by removing its inner skin; a pocket between chains gets a seal that reaches slightly into the surrounding walls. Either way the slicer prints one continuous solid instead of a loose plug inside its pocket.
-            - Find cavities lists only genuinely empty space. A chain's own inside, and the overlap between neighboring chains, were showing up as cavities and getting an extra inner skin when filled.
-            - 3MF export has a new option, on by default: color each chain all the way through in PrusaSlicer. Prusa's current profiles for the MK4/MK4S, Core One and XL carry painted colors only 5 mm into the model, so the inside of a chain came out in another extruder's color, with extra walls around it. OrcaSlicer's profiles keep that limit off.
-            - Filled cavities print as solid material without tiny leftover pockets: seals now reach the real cavity walls, and a new 3MF export option, on by default, has PrusaSlicer close gaps narrower than the nozzle.
-          releaseDraft: true
-          prerelease: false
+          releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
