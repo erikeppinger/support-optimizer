@@ -1,6 +1,8 @@
 # Support Optimizer
 
-A browser-only tool for preparing molecular structures (and STL/3MF meshes in general) for 3D printing: import a PDB/mmCIF structure or an existing mesh, close interior cavities so support material doesn't get trapped inside, find a print orientation that minimizes overhangs, preview organic support paths, and export a print-ready STL or multi-material 3MF.
+A browser-only tool for preparing molecular structures (and STL/3MF meshes in general) for 3D printing: import a PDB/mmCIF structure or an existing mesh, fill closed-off empty spaces inside it so support material doesn't get trapped there, find a print orientation that needs the least support (or, for multi-color prints, the fewest tool changes), preview organic support paths, and export a print-ready STL or multi-material 3MF.
+
+The app opens in **Quick start**, which shows each step's main buttons with good defaults; **All settings** adds every control for fine-tuning. The welcome dialog offers the choice, and a switch at the top of the panel changes it any time.
 
 Everything runs client-side in the browser (Web Workers do the heavy geometry work) — there is no backend/server component, and no data ever leaves the machine it's running on except for the optional "fetch by PDB ID" feature, which downloads directly from RCSB.
 
@@ -94,7 +96,7 @@ Worth knowing about what's already configured:
 `.github/workflows/release.yml` builds installers for Windows, macOS (Apple Silicon and Intel) and Linux on GitHub Actions and attaches them to a **draft** release — nothing is public until you click Publish on the Releases page.
 
 1. Bump the version in `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` and `src-tauri/Cargo.lock` (all four must match — the release is named after it).
-2. Add the release's notes as a new top entry in `src/whats-new.ts` (shown in the app's welcome dialog), and copy the same items into `releaseBody` in `release.yml`. Neither is generated automatically.
+2. Add the release's notes as a new top entry in `src/whats-new.ts` (shown in the app's welcome dialog), and copy the same items into `RELEASE_BODY` in the `create-release` job of `release.yml`. Neither is generated automatically.
 3. Commit and push `main`, then push a tag: `git tag v1.2.3 && git push origin v1.2.3`.
 4. When all four builds finish (about 7 minutes), review the draft on the Releases page and publish it.
 
@@ -110,9 +112,10 @@ npx tsc --noEmit     # typecheck only, no build output
 
 ## Notes and known limits
 
-- Large structures (hundreds of thousands of atoms) take real time to import and optimize — the app stays responsive throughout (heavy work runs in Web Workers), but individual steps can take from several seconds to a minute or more on complex structures. Built-in advisories (e.g. the low-res search proxy) appear automatically once a loaded model crosses that size.
+- Large structures (hundreds of thousands of atoms) take real time to import and optimize — the app stays responsive throughout (heavy work runs in Web Workers), but individual steps can take from several seconds to a minute or more on complex structures. Past about 20,000 triangles, Optimize can search on a simplified copy of the model (the result is applied to the full model); the app suggests it, and Quick start uses it automatically.
 - The "fetch by RCSB ID" feature needs an internet connection (it downloads directly from `files.rcsb.org`); everything else — loading a local STL/PDB/mmCIF/3MF file, cavity detection, orientation search, support-path preview, export — works fully offline once the page itself has loaded.
 - The organic support-path preview is illustrative, not a real slicer simulation — see the in-app help ("?") next to that option for exactly what it does and doesn't account for.
 - **What goes into a PDB/mmCIF surface:** crystallographic water is always left out (it would otherwise print as tiny loose fragments). Every other heteroatom — ligands, metal ions, buffer/cryo molecules — is listed after loading under "Ligands & ions found", where you can uncheck any of them and rebuild.
 - **3MF colors:** a loaded 3MF keeps its own colors, read either from standard 3MF color groups or from PrusaSlicer/Bambu/Orca per-triangle paint data (which is how ChimeraX-Save3MF and slicer paint tools store them). Painted triangles that a slicer subdivided more finely than one color per triangle can't be decoded and show as gray.
+- **Hollow spaces Fill can't reach:** Fill closes empty spaces sealed inside the model, but two kinds can remain. Thin gaps between touching chains that the detection grid can't see are left as they are, on purpose. And rarely, filling a cavity closes the wide opening of a nearby chamber that is still joined to the outside by a slit thinner than one print layer; the slicer then prints that chamber as a small hollow (in tests on 11 structures, one such hollow of about 19 mm³ remained, in a 100 mm print of 6VXX).
 - **Colorblind-safe colors:** the checkbox at the top of the panel switches chain colors, axis colors, overhang shading and cavity highlights to colorblind-safe palettes. Colors from an imported 3MF stay the file's own.

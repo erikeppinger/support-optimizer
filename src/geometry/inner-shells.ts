@@ -1,5 +1,5 @@
 import type { VoxelGrid } from "./voxelize";
-import type { VoidComponent } from "./detect-voids";
+import type { VoidComponent, ComponentHighlightMesh } from "./detect-voids";
 
 /**
  * Closed inner shells of a triangle soup: connected pieces (by shared vertex
@@ -13,6 +13,8 @@ export interface InnerShell {
   triangles: number[];
   min: [number, number, number];
   max: [number, number, number];
+  /** Enclosed volume (positive). */
+  volume: number;
 }
 
 export function findInnerShells(position: Float32Array): InnerShell[] {
@@ -58,7 +60,7 @@ export function findInnerShells(position: Float32Array): InnerShell[] {
     if (!(volume.get(r)! < 0)) continue;
     let s = shells.get(r);
     if (!s) {
-      s = { triangles: [], min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] };
+      s = { triangles: [], min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity], volume: -volume.get(r)! };
       shells.set(r, s);
     }
     s.triangles.push(t);
@@ -111,13 +113,18 @@ export function planInnerShellFills(
   grid: VoxelGrid,
   components: VoidComponent[],
   selectedIds: Set<number>,
+  shells: InnerShell[] = findInnerShells(position),
 ): { removedTriangles: Int32Array; filledByRemoval: Set<number> } {
-  const shells = findInnerShells(position);
   const { nx, ny, voxelSize, origin } = grid;
   const shellsOf = new Map<number, Set<number>>();
   const enclosed = new Set<number>();
   for (const c of components) {
     if (c.kind !== "cavity") continue;
+    if (c.innerShell !== undefined) {
+      shellsOf.set(c.id, new Set([c.innerShell]));
+      enclosed.add(c.id);
+      continue;
+    }
     const found = new Set<number>();
     let all = true;
     for (const v of c.voxels) {
@@ -141,4 +148,82 @@ export function planInnerShellFills(
     if (selectedIds.has(id) && [...shellsOf.get(id)!].every((i) => remove.has(i))) filledByRemoval.add(id);
   }
   return { removedTriangles: new Int32Array([...remove].flatMap((i) => shells[i].triangles)), filledByRemoval };
+}
+
+/** Smallest inner skin listed as a cavity of its own, as a share of one
+ * detection voxel's volume. Below it are bubbles of a few triangles that
+ * surface building leaves inside large structures — hundreds of them,
+ * none printable. */
+const MIN_SHELL_CAVITY_VOXELS = 0.125;
+
+/**
+ * Adds the mesh's closed inner skins that no detected cavity reaches as
+ * cavities of their own (see VoidComponent.innerShell). A pocket inside a
+ * single chain that is narrower than the detection grid has no empty voxel
+ * center, so voxel detection misses it — but its skin is in the mesh at
+ * any resolution, and removing it fills the pocket exactly. Deterministic
+ * for the same mesh and grid, so ids match between detecting and filling.
+ * Returns the components, re-sorted by size like detectVoidComponentsFull.
+ */
+export function addInnerShellCavities(
+  position: Float32Array,
+  grid: VoxelGrid,
+  components: VoidComponent[],
+  shells: InnerShell[] = findInnerShells(position),
+): VoidComponent[] {
+  if (shells.length === 0) return components;
+  const { nx, ny, nz, voxelSize, origin } = grid;
+  const reached = new Set<number>();
+  for (const c of components) {
+    if (c.kind !== "cavity") continue;
+    for (const v of c.voxels) {
+      const z = Math.floor(v / (nx * ny));
+      const y = Math.floor((v - z * nx * ny) / nx);
+      const x = v - z * nx * ny - y * nx;
+      const p: [number, number, number] = [origin.x + (x + 0.5) * voxelSize, origin.y + (y + 0.5) * voxelSize, origin.z + (z + 0.5) * voxelSize];
+      const i = shells.findIndex((s) => insideShell(position, s, p));
+      if (i >= 0) reached.add(i);
+    }
+  }
+  const voxelVolume = voxelSize ** 3;
+  let nextId = components.reduce((m, c) => Math.max(m, c.id), -1) + 1;
+  const added: VoidComponent[] = [];
+  shells.forEach((shell, i) => {
+    if (reached.has(i) || shell.volume < MIN_SHELL_CAVITY_VOXELS * voxelVolume) return;
+    let sx = 0, sy = 0, sz = 0;
+    for (const t of shell.triangles) for (let k = 0; k < 9; k += 3) {
+      sx += position[t * 9 + k]; sy += position[t * 9 + k + 1]; sz += position[t * 9 + k + 2];
+    }
+    const n = shell.triangles.length * 3;
+    added.push({
+      id: nextId++,
+      kind: "cavity",
+      voxelCount: Math.max(1, Math.round(shell.volume / voxelVolume)),
+      centroid: [sx / n, sy / n, sz / n],
+      volumeFraction: shell.volume / (nx * ny * nz * voxelVolume),
+      voxels: [],
+      innerShell: i,
+    });
+  });
+  return added.length ? [...components, ...added].sort((a, b) => b.voxelCount - a.voxelCount) : components;
+}
+
+/** Highlight mesh for a cavity found as an inner skin: the skin itself,
+ * turned to face outward so it reads as a solid blob. */
+export function innerShellHighlightMesh(position: Float32Array, shell: InnerShell, id: number): ComponentHighlightMesh {
+  const out = new Float32Array(shell.triangles.length * 9);
+  const normal = new Float32Array(out.length);
+  shell.triangles.forEach((t, j) => {
+    const o = t * 9, q = j * 9;
+    // Swap the second and third corners to flip the facing.
+    out.set(position.subarray(o, o + 3), q);
+    out.set(position.subarray(o + 6, o + 9), q + 3);
+    out.set(position.subarray(o + 3, o + 6), q + 6);
+    const e1 = [out[q + 3] - out[q], out[q + 4] - out[q + 1], out[q + 5] - out[q + 2]];
+    const e2 = [out[q + 6] - out[q], out[q + 7] - out[q + 1], out[q + 8] - out[q + 2]];
+    const n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+    const l = Math.hypot(n[0], n[1], n[2]) || 1;
+    for (let c = 0; c < 3; c++) for (let d = 0; d < 3; d++) normal[q + c * 3 + d] = n[d] / l;
+  });
+  return { id, position: out, normal };
 }

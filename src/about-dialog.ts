@@ -40,15 +40,28 @@ function dialogHtml(version: string): string {
       <button type="button" class="about-close" aria-label="Close">&times;</button>
     </div>
     <div class="about-body">
-      <p>Prepares molecular structures and other 3D models for printing: it builds a printable surface from a PDB or mmCIF entry, seals interior cavities so support material can't get trapped inside, finds the print orientation that needs the least support, and exports an STL or a multi-material 3MF.</p>
+      <p>Prepares molecular structures and other 3D models for printing: it builds a printable surface from a PDB or mmCIF entry, fills closed-off empty spaces inside it so no support gets trapped there, turns it so it needs the least support, and saves it as an STL or a 3MF with its colors.</p>
       <p class="about-note">Everything runs on your own computer. Files you load are never uploaded; only fetching a structure from RCSB goes online.</p>
 
-      <h3>Quick start</h3>
+      <h3>How much do you want to see?</h3>
+      <div class="level-choice" role="group" aria-label="Settings shown">
+        <button type="button" class="level-card" data-level="quick">
+          <strong>Quick start</strong>
+          <span>The main buttons for each step, with good defaults. Load, fill, optimize, export.</span>
+        </button>
+        <button type="button" class="level-card" data-level="all">
+          <strong>All settings</strong>
+          <span>Every control for fine-tuning: surface detail, how small a cavity can be and still be found, tunnels, overhang angle, support previews and more.</span>
+        </button>
+      </div>
+      <p class="about-fine">You can switch any time at the top of the panel; switching never changes a setting.</p>
+
+      <h3>Four steps to a print</h3>
       <ol>
         <li><strong>Load a model</strong> — drop an STL, PDB, mmCIF or 3MF file onto the viewer, or type a PDB ID under <em>1. Load model</em> and click Fetch (try <code>6LU7</code>).</li>
-        <li><strong>Seal cavities</strong> — under <em>3. Voids &amp; cavities</em>, click Find cavities, then Fill selected cavities.</li>
+        <li><strong>Fill cavities</strong> — under <em>3. Voids &amp; cavities</em>, click Find cavities, then Fill selected cavities.</li>
         <li><strong>Optimize the orientation</strong> — under <em>4. Optimize orientation</em>, click Optimize orientation.</li>
-        <li><strong>Export</strong> — under <em>5. Export</em>, save an STL, or a 3MF with each chain's color painted onto its own extruder.</li>
+        <li><strong>Export</strong> — under <em>5. Export</em>, save an STL, or a 3MF that keeps each chain's color for printing in several colors.</li>
       </ol>
       <p>Every control has a <span class="about-q">?</span> button that explains what it does.</p>
 
@@ -76,9 +89,16 @@ function writeSeenVersion(version: string) {
   }
 }
 
+/** How much of the control panel is shown; see main.ts's setUiLevel. */
+export interface UiLevelHooks {
+  get(): "quick" | "all";
+  set(level: "quick" | "all"): void;
+}
+
 /** Wires the corner bar and the About dialog. Opens it automatically on a
- * first visit and after an update (a different version than last seen). */
-export function setupAboutDialog(version: string) {
+ * first visit and after an update (a different version than last seen).
+ * The dialog also offers the choice between Quick start and All settings. */
+export function setupAboutDialog(version: string, level: UiLevelHooks) {
   const dialog = document.createElement("dialog");
   dialog.id = "about-dialog";
   dialog.setAttribute("aria-labelledby", "about-title");
@@ -95,6 +115,19 @@ export function setupAboutDialog(version: string) {
     if (e.target === dialog) dialog.close();
   });
   document.querySelector<HTMLButtonElement>("#about-btn")!.addEventListener("click", open);
+
+  const cards = [...dialog.querySelectorAll<HTMLButtonElement>(".level-card")];
+  const markLevel = () => {
+    for (const c of cards) c.setAttribute("aria-pressed", String(c.dataset.level === level.get()));
+  };
+  for (const c of cards) {
+    c.addEventListener("click", () => {
+      level.set(c.dataset.level as "quick" | "all");
+      markLevel();
+    });
+  }
+  dialog.addEventListener("toggle", markLevel);
+  markLevel();
 
   // The desktop webview won't open target="_blank" links by itself.
   if (isTauri()) {

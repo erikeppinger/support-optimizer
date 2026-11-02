@@ -266,6 +266,12 @@ html, body {
   background: rgba(0, 0, 0, 0.4);
   padding: 10px 12px;
   border-radius: 4px;
+  /* Level color: orange for Quick start, blue for All settings — a pair
+     that stays apart in every common color vision deficiency. The pressed
+     button's fill and bold label carry the same news without color. */
+  border-top: 3px solid var(--level-color);
+  --level-color: #e69f00;
+  --level-ink: #1b1b1f;
   overflow-wrap: break-word;
   word-break: break-word;
 }
@@ -678,4 +684,114 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+/* Quick start / All settings. Quick start hides fine-tuning controls
+   (".adv"); a hidden control keeps its value. !important because several
+   of them are also shown and hidden by inline styles from main.ts. */
+#controls-panel.quick .adv {
+  display: none !important;
+}
+#controls-panel:not(.quick) .quick-only {
+  display: none !important;
+}
+#controls-panel.quick.single-color .multi-color-only {
+  display: none !important;
+}
+
+.level-row {
+  display: flex;
+  align-items: center;
+}
+
+.level-switch {
+  display: flex;
+  flex: 1;
+  padding: 2px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+}
+
+.level-switch button {
+  flex: 1;
+  padding: 4px 6px;
+  background: transparent;
+  color: #aab;
+  border: none;
+  border-radius: 3px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.level-switch button[aria-pressed="true"] {
+  background: var(--level-color);
+  color: var(--level-ink);
+  font-weight: 600;
+}
+
+#controls-panel:not(.quick) {
+  --level-color: #3a7bdc;
+  --level-ink: #fff;
+}
+
+.level-switch button:focus-visible,
+.level-card:focus-visible {
+  outline: 2px solid #9ecbff;
+  outline-offset: 1px;
+}
+
+.help-more {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  color: #9ecbff;
+}
+
+/* The same choice in the welcome dialog, as two cards. */
+.level-choice {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.level-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.04);
+  color: #bbb;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.level-card strong {
+  color: #eee;
+  font-size: 0.86rem;
+}
+
+.level-card[data-level="quick"][aria-pressed="true"] {
+  border-color: #e69f00;
+  background: rgba(230, 159, 0, 0.16);
+}
+
+.level-card[data-level="all"][aria-pressed="true"] {
+  border-color: #3a7bdc;
+  background: rgba(58, 123, 220, 0.18);
+}
+
+.level-card[aria-pressed="true"] strong::after {
+  content: " ✓";
+}
+
+@media (max-width: 480px) {
+  .level-choice {
+    grid-template-columns: 1fr;
+  }
 }

@@ -26,6 +26,11 @@ export interface VoidComponentSummary {
 
 export interface VoidComponent extends VoidComponentSummary {
   voxels: number[];
+  /** Set for a cavity found only as a closed inner skin of the mesh (too
+   * small for the detection grid to see): the index of that skin in
+   * findInnerShells' result. Such a cavity has no voxels; filling it
+   * removes the skin. See addInnerShellCavities. */
+  innerShell?: number;
 }
 
 /** BFS-labels connected components of every voxel matching `includeVoxel`.
@@ -281,8 +286,7 @@ for (let dz = -SEAL_OVERLAP_VOXELS; dz <= SEAL_OVERLAP_VOXELS; dz++)
  * "Enclosed" is as seen at the detection resolution: a pocket joined to the
  * outside only by a slit narrower than about one voxel counts as a cavity,
  * and sealing it closes that slit too — up to 1.7 voxels deep across 20
- * random PDB assemblies, never on single-chain ones, and up to 1.84 once
- * snapSealsToWalls has pulled the seal onto the walls. In print units that is
+ * random PDB assemblies, never on single-chain ones. In print units that is
  * a fixed share of the model's size (~2% at 64³), so it grows with print
  * size; a finer detection grid shrinks it.
  *

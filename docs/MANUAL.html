@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Support Optimizer Manual</title>
-<meta name="description" content="Manual and tutorial for Support Optimizer v1.0.12: loading structures, sealing voids, optimizing print orientation, and exporting.">
+<meta name="description" content="Manual and tutorial for Support Optimizer v1.1.0: loading structures, sealing voids, optimizing print orientation, and exporting.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -418,11 +418,12 @@
     .sidebar { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); padding: 24px 16px; }
     main { padding: 40px 16px 100px; }
   }
+  .howto { color: var(--text-muted); font-size: 0.94em; }
 </style>
 
 <div class="shell">
   <nav class="sidebar" id="sidebar">
-    <div class="sidebar-brand"><span class="mark">v1.0.12</span><span class="name">Support Optimizer</span></div>
+    <div class="sidebar-brand"><span class="mark">v1.1.0</span><span class="name">Support Optimizer</span></div>
     <div class="sidebar-sub">Manual &amp; tutorial</div>
 
     <div class="navgroup">
@@ -452,9 +453,9 @@
   <main>
     <div class="content">
 
-      <div class="eyebrow">Documentation &middot; v1.0.12</div>
+      <div class="eyebrow">Documentation &middot; v1.1.0</div>
       <h1 class="title">Support Optimizer</h1>
-      <p class="lede">A tool for turning a molecular structure — or any mesh — into something ready to 3D print: it builds or imports the surface, finds and seals interior cavities, searches for the orientation that needs the least support material, and exports a multi-material file a slicer can use.</p>
+      <p class="lede">A tool for turning a molecular structure — or any mesh — into something ready to 3D print: it builds the surface from a protein or opens your 3D file, fills empty spaces closed off inside it, turns it so it needs the least support, and saves a file with its colors for your slicer.</p>
 
       <div class="meta-row">
         <span class="meta-pill">.pdb / .cif / .stl / .3mf</span>
@@ -469,48 +470,48 @@
         <h2 class="section-title">Overview</h2>
         <p class="section-kicker">What the tool does, end to end.</p>
 
-        <p>Molecular structures — proteins, viral capsids, DNA — make striking 3D prints, but the raw data isn't ready to print as-is. Atoms have to become a solid surface; the inevitable internal pockets left by that process become supports a print can't shed; and the structure's natural resting orientation is rarely the one that needs the least scaffolding underneath it. Support Optimizer walks a structure through all three problems in one place, then exports a file your slicer can work with.</p>
+        <p>Molecular structures — proteins, viral capsids, DNA — make striking 3D prints, but the data isn't ready to print as it is. The atoms have to become a solid surface; empty spaces closed off inside it would be printed hollow, with support trapped inside; and the way a structure happens to lie in its file is rarely the way that needs the least support. Support Optimizer takes care of all three in one place, then saves a file your slicer can print.</p>
 
-        <p>The five numbered panels down the left side of the app match the five stages below — everything in the <a href="#ref-1">Reference</a> section is organized the same way, so you can jump straight from a control you're looking at to its explanation.</p>
+        <p>The five numbered sections of the app's panel match the five steps below, and the <a href="#ref-1">Reference</a> part of this manual follows the same order, so you can go straight from a control to its explanation.</p>
 
         <div class="pipeline">
           <div class="pipeline-stage">
             <div class="num">1</div>
             <div class="dot"></div>
             <div class="label">Load</div>
-            <div class="desc">Import a mesh, or fetch a structure and build its molecular surface</div>
+            <div class="desc">Open a file, or download a protein and build its surface</div>
           </div>
           <div class="pipeline-arrow">&rarr;</div>
           <div class="pipeline-stage">
             <div class="num">2</div>
             <div class="dot"></div>
             <div class="label">Inspect</div>
-            <div class="desc">Scale it, look inside with the cross-section, see per-chain color</div>
+            <div class="desc">Set the print size, look inside, see each chain's color</div>
           </div>
           <div class="pipeline-arrow">&rarr;</div>
           <div class="pipeline-stage">
             <div class="num">3</div>
             <div class="dot"></div>
-            <div class="label">Seal voids</div>
-            <div class="desc">Find enclosed pockets and channels, close the ones worth closing</div>
+            <div class="label">Fill</div>
+            <div class="desc">Find empty spaces closed off inside the model and make them solid</div>
           </div>
           <div class="pipeline-arrow">&rarr;</div>
           <div class="pipeline-stage">
             <div class="num">4</div>
             <div class="dot"></div>
             <div class="label">Optimize</div>
-            <div class="desc">Search for the orientation with the least overhang to support</div>
+            <div class="desc">Turn the model so it needs the least support</div>
           </div>
           <div class="pipeline-arrow">&rarr;</div>
           <div class="pipeline-stage">
             <div class="num">5</div>
             <div class="dot"></div>
             <div class="label">Export</div>
-            <div class="desc">Weld the mesh and write a slicer-ready STL or multi-material 3MF</div>
+            <div class="desc">Save an STL, or a 3MF with its colors</div>
           </div>
         </div>
 
-        <p>None of this is destructive to your original file, and nothing leaves your computer except an optional structure fetch from RCSB — export whenever you want a copy of the current state, and use <strong>Undo</strong> if the last change wasn't what you wanted.</p>
+        <p>Your original file is never changed, and nothing leaves your computer except an optional download from RCSB. Export whenever you want a copy of the current state, and use <strong>Undo</strong> if the last change wasn't what you wanted.</p>
       </section>
 
       <!-- ============ TUTORIAL ============ -->
@@ -523,8 +524,8 @@
           <div class="step-body">
             <div class="step-title">Load a structure</div>
             <div class="step-action">Section 1 &middot; Fetch from RCSB by ID</div>
-            <p>Type <code class="inline">6LU7</code> into the ID field, leave the format on mmCIF and the content on <strong>Biological assembly</strong>, and click <strong>Fetch</strong>. The app downloads the structure, voxelizes it, and builds a Solvent Excluded Surface — the same kind of molecular surface tools like PyMOL and ChimeraX render. Watch the status line at the top for progress; a structure this size takes a few seconds.</p>
-            <p>Crystallographic water is left out automatically. If the file contains ligands or ions, they're listed under <strong>Ligands &amp; ions found</strong> once loading finishes — all included by default. Uncheck any you don't want printed and click <strong>Apply</strong> to rebuild.</p>
+            <p>Type <code class="inline">6LU7</code> into the ID field and click <strong>Fetch</strong>. (Under <strong>All settings</strong> you can also choose the file format and what to download; the defaults are right here.) The app downloads the structure and builds its molecular surface — the same kind of surface PyMOL and ChimeraX show. The status line at the top shows the progress; a structure this size takes a few seconds.</p>
+            <p>Water is left out automatically. If the file contains ligands or ions, they're listed under <strong>Ligands &amp; ions found</strong> once loading finishes, all included. Uncheck any you don't want printed and click <strong>Apply</strong>.</p>
           </div>
         </div>
 
@@ -533,17 +534,17 @@
           <div class="step-body">
             <div class="step-title">Look around</div>
             <div class="step-action">Section 2 &middot; Scale &amp; view</div>
-            <p>Drag in the viewport to orbit, scroll to zoom. Pull the <strong>Cross-section</strong> slider partway across to slice the model open and see its interior directly — this is the fastest way to eyeball whether a structure looks like it has real internal pockets before you go looking for them formally. Reset it (double-click the slider, or the Reset button) when you're done.</p>
+            <p>Drag in the view to turn the model, scroll to zoom. Pull the <strong>Cross-section</strong> slider partway to cut the model open on screen and look inside — the quickest way to see whether it has empty spaces inside. Double-click the slider or click Reset when you're done.</p>
           </div>
         </div>
 
         <div class="tutorial-step">
           <div class="step-num">3</div>
           <div class="step-body">
-            <div class="step-title">Find and seal cavities</div>
+            <div class="step-title">Find and fill cavities</div>
             <div class="step-action">Section 3 &middot; Voids &amp; cavities</div>
-            <p>Click <strong>Find cavities</strong>. The list below fills with every fully-enclosed pocket the structure has, each pre-checked and highlighted on the model itself (magenta = will fill, orange = excluded). These are worth sealing: any support material a slicer generates inside one is permanently trapped once printing finishes. Review the list — for a small, buried pocket there's rarely a reason not to fill it — then click <strong>Fill selected cavities</strong>.</p>
-            <p>If you're curious about open channels too (common right at the seam between two touching subunits), click <strong>Find tunnels</strong> and review that list separately. Nothing there is pre-selected, since filling one is a more deliberate choice than sealing a fully buried pocket. The two lists are independent: finding tunnels doesn't reset your cavity selection, and vice versa.</p>
+            <p>Click <strong>Find cavities</strong>. The list shows every <strong>cavity</strong> — an empty space closed off on all sides inside the model — each checked for filling and highlighted on the model (magenta = will fill, orange = left open). The slicer would print each one as a hollow space, and any support it puts inside could never be removed. Then click <strong>Fill selected cavities</strong>. Grooves and pockets you can see from outside aren't cavities and stay as they are.</p>
+            <p>Under <strong>All settings</strong> you can also look for <strong>tunnels</strong>: narrow channels open to the outside, often where two chains meet. None are selected, since filling one changes the model's shape; check only the ones you want closed.</p>
           </div>
         </div>
 
@@ -552,7 +553,7 @@
           <div class="step-body">
             <div class="step-title">Optimize the orientation</div>
             <div class="step-action">Section 4 &middot; Optimize orientation</div>
-            <p>Click <strong>Optimize orientation</strong>. The search tries dozens of candidate orientations and settles on whichever needs the least support material underneath it — you'll see the model rotate and the overhang coloring (red = needs support) shrink. For a model past about 20,000 triangles, the app suggests checking <strong>Use low-res proxy</strong> first so the search itself doesn't take too long; the rotation it finds is applied losslessly to your full-resolution model either way.</p>
+            <p>Click <strong>Optimize orientation</strong>. The app tries dozens of orientations and picks the one that needs the least support — you'll see the model turn and the red areas (needs support) shrink. A model printed in several colors can instead be turned for the fewest color changes, under <strong>Optimize for</strong>. For a large model, the search runs on a simplified copy so it doesn't take long; the result is applied to your full model.</p>
           </div>
         </div>
 
@@ -561,7 +562,7 @@
           <div class="step-body">
             <div class="step-title">See what changed</div>
             <div class="step-action">Section 4 &middot; Show support paths / Compare to start model</div>
-            <p>Turn on <strong>Compare to start model</strong> to place your original orientation beside the optimized one, and <strong>Show support paths</strong> to get a rough, illustrative sense of where supports would go and how much of them there'd be — in Organic (tree-like), Snug or Grid style. This pair of views is the fastest way to confirm the optimization actually helped before you commit to an export.</p>
+            <p>Under <strong>All settings</strong>, turn on <strong>Compare to start model</strong> to see the model as you loaded it next to the optimized one, and <strong>Show support paths</strong> for a rough picture of where supports would go. Together they show quickly whether the new orientation helped.</p>
           </div>
         </div>
 
@@ -570,33 +571,39 @@
           <div class="step-body">
             <div class="step-title">Export</div>
             <div class="step-action">Section 5 &middot; Export STL / Export 3MF</div>
-            <p>Click <strong>Export STL</strong> for a standard single-material file, or <strong>Export 3MF</strong> if you want each chain printed in its own filament: the 3MF arrives in your slicer as one part with each chain's color painted onto its own extruder. Both are welded into a proper indexed mesh on export, so a slicer's manifold checker won't flag false "open edges." In the desktop app a Save As dialog lets you choose where the file goes.</p>
+            <p>Click <strong>Export STL</strong> for a single-color print, or <strong>Export 3MF</strong> to print each chain in its own filament: the slicer opens the 3MF as one part with each chain's color on its own extruder. Both files are saved as one closed solid, so the slicer doesn't report open edges. In the desktop app you choose where the file goes.</p>
           </div>
         </div>
 
         <div class="callout">
           <div class="callout-label">Worth knowing</div>
-          <p>Every mutating step (Scale, Optimize, Fill) can be undone once with the <strong>Undo last change</strong> button at the top of the panel — but only one step back, not a full history. If you're experimenting, export a copy before trying something you might want to compare against later.</p>
+          <p>Scale, Optimize and Fill can each be taken back with <strong>Undo last change</strong> at the top of the panel — but only one step, not a full history. If you're trying things out, export a copy of anything you might want to compare against later.</p>
         </div>
       </section>
 
       <!-- ============ REFERENCE ============ -->
       <section class="doc-section" id="ref-0">
         <h2 class="section-title">General controls</h2>
-        <p class="section-kicker">Controls that apply to everything: two above the numbered sections, and two icons in the lower-right corner.</p>
+        <p class="section-kicker">Controls that apply to everything: three above the numbered sections, and two icons in the lower-right corner.</p>
+
+        <h4 class="control-title">Quick start / All settings</h4>
+        <p>A switch at the top of the panel, also offered the first time you open the app. <strong>Quick start</strong> shows the main buttons for each step, with good defaults — enough for most prints. <strong>All settings</strong> shows every control described in this manual. The selected button and a line along the top of the panel are orange for Quick start and blue for All settings.</p>
+        <p>Switching only shows or hides controls; it never changes a setting. Quick start hides: the surface detail, file format and download choice; the chain and ligand filters; scaling by percentage or along one axis, and the chain palette; the detection setting, the cavity size limit, the highlights and everything for tunnels; the overhang angle, the simplified-copy option, the support preview and the comparison; and raising the base and the color-through option for 3MF. Two things work a little differently in Quick start: you set the print size as the model's longest side in mm, and for a large model the orientation is searched on a simplified copy automatically. <strong>Optimize for</strong> shows only when the model has several colors. In Quick start, each step's help ends with a pointer to All settings.</p>
+        <p>The choice is remembered on this computer.</p>
 
         <h4 class="control-title">Undo last change</h4>
-        <p>Restores the geometry to exactly how it stood before the last Scale, Optimize, or Fill. One step only — not a full history. Subunit colors and the chain legend come back too, if that operation had changed them.</p>
+        <p>Takes back the last Scale, Optimize or Fill, so the model is exactly as it was before. One step only, not a full history. Chain colors come back too, if that step had changed them.</p>
 
         <h4 class="control-title">Colorblind-safe colors</h4>
-        <p>Switches every color that carries meaning to colorblind-safe palettes at once:</p>
+        <p>Switches every color that carries meaning to colors that stay easy to tell apart with color blindness:</p>
         <ul>
           <li><strong>Chain colors</strong> switch to the Tol Muted palette (and back to Default when turned off). If you picked a palette yourself under <a href="#ref-2">Scale &amp; view</a>, it's kept.</li>
           <li><strong>Overhang shading</strong> becomes <span class="swatch" style="background:#0072b2"></span>blue / <span class="swatch" style="background:#d55e00"></span>vermillion instead of blue / red.</li>
           <li><strong>Cavity highlights</strong> become <span class="swatch" style="background:#009e73"></span>bluish green (will fill) / <span class="swatch" style="background:#e69f00"></span>orange (excluded).</li>
           <li><strong>Axis arrows</strong> become orange / reddish purple / sky blue.</li>
         </ul>
-        <p>It repaints whatever is loaded immediately and applies to anything you load while it's on. Colors that came from an imported 3MF are the file's own and stay as they are — only their overhang marking changes. Chain colors use Tol Muted rather than Okabe–Ito because Okabe–Ito's vermillion is also the overhang color, which would make a sixth chain look like "needs support."</p>
+        <p>The change shows right away and stays on for anything you load next. Colors from an imported 3MF are the file's own and stay as they are — only the overhang marking changes. The Quick start / All settings colors, orange and blue, stay apart with every common kind of color blindness, and the selected button is also shown in bold.</p>
+        <p class="howto"><strong>How it works:</strong> chain colors use Tol Muted rather than Okabe–Ito because Okabe–Ito's vermillion is also the overhang color, which would make a sixth chain look like "needs support."</p>
 
         <h4 class="control-title">About and GitHub icons (lower-right corner)</h4>
         <p>The <strong>ⓘ</strong> button opens the welcome dialog: what the tool does, a four-step quick start, what's new in recent versions, and links to this manual, the desktop downloads and the source code. It opens by itself the first time you use the tool and once after each update. The GitHub icon opens the source code; the version number sits beside both.</p>
@@ -607,33 +614,34 @@
         <p class="section-kicker">Getting a structure or mesh into the viewer.</p>
 
         <h4 class="control-title">PDB/mmCIF surface detail</h4>
-        <p>Sets the voxel grid resolution the molecular surface is built at when you import a <code class="inline">.pdb</code> or <code class="inline">.cif</code> file — it has no effect on STL or 3MF imports, which already carry their own triangles at whatever resolution the file has.</p>
-        <p><strong>Auto</strong> (the default) scales the grid down as atom count grows, so a very large structure — hundreds of thousands of atoms — still imports in a reasonable time. Pick a fixed value instead if you want consistent detail across structures of different sizes, or want more detail than Auto would choose and are willing to wait longer for it.</p>
+        <p>How fine the surface of a protein (<code class="inline">.pdb</code> or <code class="inline">.cif</code> file) is built. Higher shows more detail, such as small grooves, but takes longer to load. STL and 3MF files are loaded as they are and don't use this.</p>
+        <p><strong>Auto</strong> (the default) uses less detail for very large structures — hundreds of thousands of atoms — so loading stays fast. Pick a fixed value to get the same detail for every structure, or more detail than Auto would choose.</p>
 
         <h4 class="control-title">Browse for a file&hellip;</h4>
         <p>Loads a local <code class="inline">.stl</code>, <code class="inline">.pdb</code>, <code class="inline">.cif</code>, or <code class="inline">.3mf</code> file. You can also just drag a file anywhere onto the viewport.</p>
         <p>A <strong>3MF</strong> keeps its own colors. They're read either from standard 3MF color groups or from the per-triangle paint data PrusaSlicer, Bambu Studio and OrcaSlicer use — which is also how <a href="https://github.com/erikeppinger/chimerax-save3mf">ChimeraX-Save3MF</a> stores each chain's color. Triangles a slicer's paint tool subdivided more finely than one color per triangle can't be decoded and show as gray.</p>
 
         <h4 class="control-title">Fetch from RCSB by ID</h4>
-        <p>Downloads a structure directly from <code class="inline">files.rcsb.org</code> by its ID (e.g. <code class="inline">6LU7</code>) — the same file you'd get visiting the URL yourself, no account or API key needed. It's read straight into memory, never saved to disk.</p>
+        <p>Type a PDB ID (for example <code class="inline">6LU7</code>) to download the structure straight from the RCSB Protein Data Bank — no account needed. The file is only kept in memory, never saved to your disk.</p>
         <ul>
-          <li><strong>mmCIF</strong> is the modern format with no per-column width limit, so it can hold structures with tens of thousands of atoms or hundreds of chains that the older format can't. Use this unless you have a specific reason not to.</li>
-          <li><strong>PDB (legacy)</strong> is the old fixed-column text format. Fine for small-to-medium structures; large ones may be truncated or simply unavailable in it.</li>
+          <li><strong>mmCIF</strong> is the current file format and works for structures of any size. Use it unless you have a reason not to.</li>
+          <li><strong>PDB (legacy)</strong> is the older format: fine for small and medium structures, but very large ones may be cut short or not offered in it.</li>
+        </ul>
         </ul>
 
         <h4 class="control-title">Structure content</h4>
         <ul>
-          <li><strong>Biological assembly</strong> (default) is the biologically real molecule — what RCSB's own structure page shows. Many entries are deposited as one copy of a repeating unit even though the functional protein is a dimer, trimer or larger; this downloads the already-rebuilt complex. Symmetry copies of a chain arrive suffixed (A, A-2, A-3) so each still gets its own color.</li>
-          <li><strong>Asymmetric unit</strong> is the raw deposited file, with no symmetry applied. Pick it if you want exactly what was deposited, or if an entry has no assembly defined.</li>
+          <li><strong>Biological assembly</strong> (default) is the complete molecule as it works in nature — what the RCSB web page shows. Many entries are stored as one copy of a repeating piece, even when the real protein is made of two, three or more copies; this downloads the complete version. Copies of the same chain are named A, A-2, A-3, so each still gets its own color.</li>
+          <li><strong>Asymmetric unit</strong> is the file exactly as the researchers deposited it, without the copies added. Pick it if that is what you want, or if an entry has no assembly.</li>
         </ul>
         <p>If a structure looks smaller or is missing subunits compared to the RCSB page, this setting is why.</p>
 
         <h4 class="control-title">Build surface from</h4>
-        <p>Appears after a multi-chain PDB/mmCIF loads. Rebuilds the surface from a single chain instead of all of them — useful for printing one protomer of a large complex. It reuses the atoms already read from the file, so nothing is downloaded again. Choose "All chains" and Apply to go back. Rebuilding discards any Fill or Optimize work on the current model.</p>
+        <p>Appears after a protein with several chains loads. Builds the model from one chain only — to print one piece of a large complex. Nothing is downloaded again. Choose "All chains" and Apply to go back. Any Fill or Optimize you did is lost, since the surface is built anew.</p>
 
         <h4 class="control-title">Ligands &amp; ions found</h4>
-        <p>Appears after a PDB/mmCIF loads, if the file contains any heteroatoms: ligands, metal ions, or leftover crystallization molecules (buffer salts, glycerol, PEG). Each type is listed with its atom count, all checked by default. Uncheck what you don't want in the printed surface and click <strong>Apply</strong> to rebuild — again from the atoms already read, and combined with whatever chain is selected above.</p>
-        <p>A ligand bound in a real pocket usually overlaps the protein's own surface and prints fine either way. This list matters most for a loose ion or additive sitting apart from the structure, which would otherwise print as its own tiny floating fragment.</p>
+        <p>Appears after a protein loads, if the file contains anything besides the protein chains: ligands, metal ions, or leftovers from the experiment such as salts, glycerol or PEG. Each is listed with its atom count, all included by default. Uncheck what you don't want in the print and click <strong>Apply</strong>; the chain choice above is kept.</p>
+        <p>A ligand bound in a pocket of the protein usually prints fine either way. This list matters most for a loose ion or additive sitting apart from the protein, which would print as a tiny separate piece.</p>
         <p><strong>Water is never listed</strong> — crystallographic water is always left out, because each water molecule would become a separate speck in the print.</p>
       </section>
 
@@ -642,20 +650,18 @@
         <p class="section-kicker">Sizing the model and looking at it.</p>
 
         <h4 class="control-title">Scale model</h4>
-        <p>Always <strong>uniform</strong> — the same factor applies to every axis at once, so proportions never distort. Scaling never adds or removes triangles.</p>
-        <div class="formula">geometry.scale(f, f, f)
-By percentage:      f = pct / 100
-To target size:     f = target / (current size along the chosen axis)</div>
+        <p>Makes the model bigger or smaller. It always scales evenly in all directions, so the proportions never change. <strong>By percentage:</strong> 200% makes it twice as large. <strong>To target size:</strong> type the size you want in mm, for the longest side or for X, Y or Z.</p>
 
         <h4 class="control-title">Cross-section</h4>
-        <p>Sweeps a clipping plane along the model's own X axis to reveal what's inside. Purely a view setting — the underlying geometry is never touched by it. Double-click the slider, or use the Reset button beside it, to snap back to fully closed.</p>
+        <p>Cuts the model open on screen, along its X axis, so you can look inside it. It only changes the view, never the model. Double-click the slider, or click Reset, to switch it off.</p>
 
         <h4 class="control-title">Show subunit colors</h4>
-        <p>Available once a multi-chain structure (or a colored 3MF) is loaded. Each chain was voxelized and meshed <em>independently</em> during import — not just recolored afterward — so the boundary between two chains in this view is geometrically exact, not a nearest-atom approximation. A legend below lists each chain and its triangle count.</p>
-        <p>Overhangs still show in this view: any face past the critical angle is flagged in the same solid overhang color as the plain overhang view. Filling a cavity colors its seal to match the nearest chain, so the colors survive a Fill.</p>
+        <p>Available once a protein with several chains (or a colored 3MF) is loaded. Gives each chain its own color, so you can see where one ends and the next begins; a legend lists each chain. These are the colors the 3MF export prints.</p>
+        <p>Surfaces that need support still show in red in this view. When Fill closes a cavity, the filling takes the color of the nearest chain.</p>
+        <p class="howto"><strong>How it works:</strong> each chain is built as its own surface during loading, so the borders between colors follow the real chain borders exactly.</p>
 
         <h4 class="control-title">Palette</h4>
-        <p>Which colors chains cycle through. Switching is instant (no rebuild).</p>
+        <p>The set of colors the chains use. Switching only changes the colors, right away.</p>
         <ul>
           <li><strong>Default</strong> — 12 colors, chosen to avoid the overhang red and blue.</li>
           <li><strong>Okabe–Ito</strong> and <strong>Tol Muted</strong> — standard colorblind-safe palettes (7 and 9 colors).</li>
@@ -668,105 +674,120 @@ To target size:     f = target / (current size along the chosen axis)</div>
         <div class="ref-badge-row"><div class="ref-badge">3</div><h2 class="section-title" style="border:none;padding:0;margin:0;">Voids &amp; cavities</h2></div>
         <p class="section-kicker">Finding and closing interior empty space, before it becomes trapped support material.</p>
 
-        <p>Detection works by voxelizing the current model, then flood-filling outward from a point guaranteed to be outside it. Everything inside the model's surface counts as solid — the same way a slicer merges a model's shells — so a chain's own interior, and the space where separately built chains overlap, are never mistaken for voids. Every disconnected pocket of genuinely empty space it finds is one of two kinds:</p>
-        <ul>
-          <li><strong>Cavity</strong> &mdash; empty voxels the flood-fill never reaches. Fully enclosed, including a pocket trapped between two touching subunits with no path out.</li>
-          <li><strong>Tunnel</strong> &mdash; empty voxels the flood-fill <em>does</em> reach, but that still sit within the model's own bounds. An open channel through the part, most often along a subunit seam that never fully closes.</li>
-        </ul>
+        <p>A <strong>cavity</strong> is an empty space closed off on all sides inside the model. You can't see it from outside, but the slicer prints it as a hollow space with walls of its own, and any support it puts inside can never be removed. A <strong>tunnel</strong> is a narrow channel through the model that is open to the outside, most often along the seam where two chains meet but don't quite close. Grooves and pockets open to the surface are neither — they are part of the model's shape and are never listed.</p>
+        <p>Very small cavities inside a single chain are found too, whatever the detection setting. Large structures can have dozens to hundreds of cavities; the list shows the 20 largest and counts the rest below them, and those are filled too.</p>
         <p>Cavities and tunnels each have their own Find button, list and Fill button. Finding one kind leaves the other list and its selection untouched.</p>
+        <p class="howto"><strong>How it works:</strong> the model is divided into a grid of small cubes (voxels), and the empty cubes that can be reached from outside are marked. Empty cubes that can't be reached are cavities; reachable ones inside the model's outline are tunnels. Everything inside the model's surface counts as solid first — the way a slicer merges overlapping parts — so the space where chains overlap is never listed. A cavity inside one chain also has its own closed inner surface in the mesh, which is how cavities smaller than a grid cube are found (down to an eighth of one).</p>
 
         <h4 class="control-title">Void detection resolution</h4>
-        <p>The voxel grid resolution detection runs at, shared by both lists. Higher finds smaller and thinner voids — including narrow interface pockets — and shapes their seal more precisely. Fill never re-voxelizes the visible exterior, so this setting mostly decides which voids get found. One effect does reach the surface: a pocket joined to the outside only by a slit narrower than one voxel counts as enclosed, and filling it closes that slit too, up to about two voxels deep. Since a voxel is a fixed share of the model's size, that closure grows with print size — about 2% of the model's largest dimension at Medium (64³), half that at High (128³). For large prints, a higher resolution keeps the surface more faithful.</p>
+        <p>How small a cavity can be and still be found. Higher finds smaller and narrower cavities, and the filling follows their shape more closely, but it takes longer. Medium suits most prints.</p>
+        <p>It also matters for large prints. A cavity joined to the outside only by a very narrow slit counts as closed, and filling it closes the slit as well. At Medium, slits narrower than about 1/64 of the model's longest side count as closed; at High, 1/128. So for a large print, a higher setting keeps more of the surface's fine detail open.</p>
 
         <h3 class="sub-title"><span class="swatch" style="background:var(--cavity)"></span>Cavities</h3>
-        <p>Fully enclosed pockets. Every one found starts pre-checked for filling by default — turn on <strong>Custom auto-select size limit</strong> to instead pre-check only cavities at or under a voxel-count threshold you choose, hand-tuning individual boxes in the list afterward either way.</p>
+        <p>Every cavity found is checked for filling. Turn on <strong>Custom auto-select size limit</strong> to check only cavities up to a size you choose — for example to leave large cavities open. You can still check or uncheck each cavity in the list yourself.</p>
 
         <h4 class="control-title">Fill selected cavities</h4>
-        <p>Fills each selected cavity without touching the visible exterior — it is <strong>never</strong> re-voxelized, so the outer surface stays byte-identical.</p>
-        <p>A cavity inside a single chain is bounded by that chain's own surface: a closed inner skin in the mesh. Fill deletes that skin, so the pocket becomes solid exactly, with nothing added.</p>
+        <p>Makes the selected cavities solid, so the slicer doesn't print hollow spaces inside your model. The outside of the model stays exactly as it is.</p>
+        <p>A cavity inside a single chain is simply closed up. A cavity between two chains gets a small filler piece that reaches a little into the walls around it, so the slicer joins it to the model instead of printing it as a loose plug. Thin empty gaps the filler would trap next to the outer wall are filled too. A very small cavity right under the outer surface has nothing to hold on to and is skipped.</p>
         <div class="callout">
-          <div class="callout-label">How a seal joins the subunit</div>
-          <p>A cavity closed off between chains has no skin of its own, and neither does any part of a cavity that reaches past its skin through a wall thinner than a voxel. These get a small sealing mesh instead. The seal fills the pocket and reaches about 2 detection voxels into the solid around it. The slicer merges overlapping solids, so the pocket becomes part of the subunits around it — one continuous solid, with no gap that would leave the seal as a loose plug inside its pocket.</p>
-          <p>The overlap only grows into material at least 2 voxels from the open outside, which keeps it clear of the outer surface. Where such a pocket sits right under a thin outer wall, the overlap stops short there; the seal's surface is then pulled onto the wall itself, just far enough past it to fuse. At a pocket's narrow tip a pinhole of a few tenths of a millimetre can remain — <strong>Close gaps narrower than the nozzle</strong> under Export takes care of it in PrusaSlicer. Bits of overlap that would end up cut off from the rest of the seal are left out, so nothing exports as a loose speck; a pocket of only a few voxels right at the outer surface has nothing to anchor to and is skipped.</p>
+          <div class="callout-label">How it works</div>
+          <p>A cavity inside a chain is bounded by a closed inner surface in the mesh; Fill removes that surface, so the cavity becomes solid with nothing added. A cavity between chains has no surface of its own, and gets a filler piece built from its grid cubes. The filler reaches about 2 grid cubes into the solid around it, but only into material at least 2 cubes from the open outside, so it stays clear of the outer surface. Where that makes it stop short under a thin outer wall, it can close in a thin empty gap next to the wall; Fill checks around each filler on a grid six times finer and fills those gaps too. Bits of overlap that would end up cut off from the rest of the filler are left out, so nothing exports as a loose speck.</p>
         </div>
 
         <h3 class="sub-title"><span class="swatch" style="background:var(--tunnel)"></span>Tunnels</h3>
-        <p>Open channels. Nothing is pre-selected here — filling a tunnel removes an open channel entirely, a bigger geometric decision than sealing a buried pocket, so review each one's voxel count and rough volume before checking it.</p>
+        <p>Narrow channels open to the outside. None are selected — filling a tunnel changes the model's shape more than filling a cavity, so check only the ones you want closed.</p>
 
         <h4 class="control-title">Fill selected tunnels</h4>
-        <p>Adds a seal for each selected tunnel, but pulled back one voxel from the tunnel's walls instead of reaching into them, so it isn't fused with them: in the slicer it can come out as a separate plug inside the channel. A tunnel thinner than about three voxels has nothing left after that margin and is skipped — raise the detection resolution and find tunnels again to seal it.</p>
+        <p>Fills each selected tunnel; the outside stays as it is. Unlike a cavity filler, a tunnel filler keeps a small gap to the tunnel's walls, so the slicer may print it as a separate plug inside the channel. A tunnel narrower than about 3 grid cubes is skipped — raise the detection setting and find tunnels again to fill it.</p>
 
         <div class="callout warn">
           <div class="callout-label">Oversized voids are refused</div>
-          <p>Each list shows a void's size as a share of the model's own volume. A "tunnel" can sometimes be the entire open space between several distant chains rather than a local gap — filling that would bolt a patch roughly the size of the model onto it. Fill refuses any void at or above 20% of the model's volume and says why; those are flagged in the list.</p>
+          <p>Each list shows a cavity's or tunnel's size as a share of the model. A "tunnel" can sometimes be all the open space between several distant chains rather than a small gap — filling that would add a piece about the size of the model. Fill refuses anything at or above 20% of the model's volume, says why, and marks it in the list.</p>
         </div>
 
         <h4 class="control-title">Highlight on model</h4>
-        <p>Draws a small standalone mesh for each of the 20 largest cavities and 20 largest tunnels — literally remeshing that void's own enclosed voxels — colored <span class="swatch" style="background:#e0189c"></span><strong>magenta</strong> if it will be filled, <span class="swatch" style="background:#d38a1e"></span><strong>orange</strong> if excluded (bluish green / orange with colorblind-safe colors on). The outer shell turns semi-transparent while this is on, since these highlights sit fully inside solid material and would otherwise render hidden behind it.</p>
+        <p>Shows the cavities and tunnels inside the model: <span class="swatch" style="background:#e0189c"></span><strong>magenta</strong> ones will be filled, <span class="swatch" style="background:#d38a1e"></span><strong>orange</strong> ones are left as they are (green / orange with colorblind-safe colors on). The model turns see-through so you can see them. The 20 largest of each are shown.</p>
       </section>
 
       <section class="doc-section" id="ref-4">
         <div class="ref-badge-row"><div class="ref-badge">4</div><h2 class="section-title" style="border:none;padding:0;margin:0;">Optimize orientation</h2></div>
-        <p class="section-kicker">Searching for the resting orientation that minimizes support material.</p>
+        <p class="section-kicker">Turning the model so it needs the least support.</p>
 
         <h4 class="control-title">Critical overhang angle</h4>
-        <p>A face counts as needing support once it leans past this many degrees from vertical, measured from its own surface normal:</p>
+        <p>How steep an overhang your printer can print without support. A surface that leans further than this from vertical needs support and shows in red. 0&deg; is a vertical wall; 90&deg; is a flat ceiling facing down. Most FDM printers manage about 45&deg;, resin printers often more. Everything in this step uses this angle: what Optimize minimizes, and where the support preview starts.</p>
+        <p><strong>Lower angles take longer.</strong> More surfaces count as overhangs, and each has to be checked — on a test sphere, 30&deg; took about twice as long as 45&deg;, and 15&deg; about three times as long.</p>
+        <p class="howto"><strong>How it works:</strong> each triangle's lean is</p>
         <div class="formula">lean&deg; = asin(clamp(&minus;normalZ, &minus;1, 1)) &times; 180/&pi;</div>
-        <p>0&deg; is a vertical wall (self-supporting); 90&deg; is a flat, downward-facing overhang, the worst case. This single number drives the overhang coloring, the support-path preview, and the cost function Optimize searches on. Set it to match your printer and material: most FDM machines manage about 45&deg;, resin printers often more.</p>
-        <p><strong>Lower angles take longer to compute.</strong> Every face past the angle has to be traced down to whatever is below it, so Optimize and the support-path preview slow down as more faces count as overhangs. On a test sphere, 30&deg; took about twice as long as 45&deg;, and 15&deg; about three times as long.</p>
 
         <h4 class="control-title">Optimize orientation</h4>
-        <p>Samples roughly 32 points spread evenly over a sphere (a Fibonacci sphere) plus the 6 axis-aligned directions — mechanical and molecular parts often have their true optimum sitting exactly on one of those, which sphere sampling alone can miss — scores every candidate, refines a small grid around the best few, and picks the winner. The sphere sample is randomly rotated on every run, so how well the search does doesn't depend on how the structure happens to be oriented in its file; the 6 axis directions stay fixed.</p>
+        <p>Turns the model so it needs as little support as possible — or, for a print in several colors, as few color changes as you chose under <strong>Optimize for</strong>. Undo takes it back. You can rotate the view while it runs; rotating with the mouse only changes the view, never the model.</p>
+        <p class="howto"><strong>How it works:</strong> about 38 directions are tried — 32 spread evenly over a sphere (a Fibonacci sphere), turned randomly on each run so the result doesn't depend on how the structure lies in its file, plus the 6 axis directions, where molecular and mechanical parts often rest best. The best few are refined, and the best one wins. Each is scored by</p>
         <div class="formula">cost = &Sigma; over overhang triangles of
-       area &times; (drop height to the plate, or to whatever surface occludes it first)</div>
-        <p>The score also subtracts a build-plate contact-area term, weighted at roughly 15% of the model's bounding radius — without it, a corner-balanced orientation can tie a flat, stable one, since both can show zero triangles past the critical angle even though only one of them would actually sit still on a print bed.</p>
+       area &times; (drop height to the plate, or to whatever surface is below it first)</div>
+        <p>minus a bonus for contact with the plate (weighted at about 15% of the model's radius), so a stable, flat rest beats balancing on a corner.</p>
 
-        <h4 class="control-title">Use low-res proxy for orientation search</h4>
-        <p>The search evaluates cost for dozens of candidate orientations, and each evaluation costs roughly the square of the triangle count — a 200,000-triangle mesh means on the order of 4&times;10<sup>10</sup> operations <em>per candidate</em>, infeasible directly. This voxelizes the mesh at a coarser resolution and searches a remesh of that instead. The result is just a rotation, so it's exact and lossless to apply to your full-resolution model afterward — only the search itself is approximate, never the final geometry. The app suggests it once a model passes 20,000 triangles.</p>
+        <h4 class="control-title">Search on a simplified copy (faster)</h4>
+        <p>Makes Optimize much faster on detailed models by searching for the best orientation on a simplified copy. The result is then applied to your full model, which isn't simplified — only the search uses the copy. The app suggests it for models above 20,000 triangles, and Quick start uses it automatically for them. Coarse is fastest; Fine is closest to your model.</p>
+        <p class="howto"><strong>How it works:</strong> the search time grows with the square of the number of triangles: a 200,000-triangle model would take about 4&times;10<sup>10</sup> steps for each direction tried. The copy is rebuilt from a grid of 24–48 cubes per side. The result is only a rotation, so applying it to the full model loses nothing.</p>
+
+        <h4 class="control-title">Optimize for</h4>
+        <p>What Optimize turns the model for, when it prints in several colors — one per chain, or a colored 3MF.</p>
+        <ul>
+          <li><strong>Least support</strong> (default) turns it so it needs the least support material.</li>
+          <li><strong>Fewest tool changes</strong> turns it so the printer switches colors as rarely as possible, which saves time and purged filament. Support only decides between otherwise equal choices.</li>
+          <li><strong>Balanced</strong> weighs both equally.</li>
+        </ul>
+        <p>Every layer prints each color it contains, so color changes add up layer by layer, and the orientation matters a lot: on test models the count differed by up to about three times between orientations. The status line after Optimize shows the count before and after. With a single color there is nothing to change, and Optimize goes for least support.</p>
+        <p class="howto"><strong>How it works:</strong> changes are counted for 0.2&nbsp;mm layers: a layer with <em>k</em> colors needs <em>k</em>&nbsp;&minus;&nbsp;1 changes, one more when it doesn't contain the color the layer below ended on. On 12 test orientations of four models, this matched PrusaSlicer's count within 3%, and OrcaSlicer and Bambu Studio counted the same as PrusaSlicer. For Balanced, both are scaled to the range seen across the orientations tried, then added.</p>
+        <div class="callout">
+          <div class="callout-label">What a change costs</div>
+          <p>A tool changer like the Prusa XL swaps toolheads in seconds. A single-nozzle system like Bambu's AMS or Prusa's MMU3 unloads, loads and purges filament every time. On a four-chain test model sliced for a Bambu A1, the orientation with fewest changes cut them from 1,147 to 603, the purged filament from 392&nbsp;g to 261&nbsp;g, and the estimated print time by 14 hours.</p>
+        </div>
 
         <h4 class="control-title">Show support paths &middot; Style</h4>
-        <p>An illustrative visualization, not a real slicer simulation, and never part of the export. All three styles start from the same overhang triangles, grouped into "roots", each traced straight down to where it lands — the plate, or another part of the model underneath (bridging).</p>
+        <p>Draws a rough picture of where supports would go, to compare orientations. It isn't what your slicer will make, and it is never exported.</p>
         <ul>
-          <li><strong>Organic</strong> (tree-like) — roots merge pairwise as they descend, like tree supports fusing into fewer trunks near the bed. Every connecting segment stays within the critical overhang angle of vertical, since a support branch is printed the same way the part is; a pair that can't merge within that angle goes to the plate separately.</li>
-          <li><strong>Snug</strong> — the same roots, closely following the overhang's shape, each drawn as its own straight vertical column.</li>
-          <li><strong>Grid</strong> — roots snapped to a regular lattice, each its own straight column — a blockier, more generic pattern.</li>
+          <li><strong>Organic</strong> (tree-like) — branches that join into fewer trunks toward the plate, like tree supports. Branches never lean further than the overhang angle, since they have to be printable too.</li>
+          <li><strong>Snug</strong> — straight columns that follow the overhang's shape.</li>
+          <li><strong>Grid</strong> — straight columns on a regular grid.</li>
         </ul>
-        <p>Runs in the background; skipped only above 3,000,000 triangles.</p>
+        <p>It runs in the background, so the app stays responsive; it is skipped for models above 3,000,000 triangles.</p>
+        <p class="howto"><strong>How it works:</strong> overhanging triangles are grouped into starting points, and each is traced straight down to the plate or to the part of the model below it.</p>
 
         <h4 class="control-title">Compare to start model</h4>
-        <p>Places a copy of the model <em>as it was when you loaded it</em> beside the current one, offset by a gap proportional to the model's own width. The difference shows everything you've done since — scaling, filling and optimizing. Undo doesn't move this baseline; only loading a new model does. Combine it with the support-path view to compare support before and after.</p>
+        <p>Shows the model as you loaded it next to the current one, so you can see what changed — everything since loading, not only the last step. Undo doesn't change this copy; loading a new model resets it. Together with the support preview, it shows how much support the new orientation saves.</p>
       </section>
 
       <section class="doc-section" id="ref-5">
         <div class="ref-badge-row"><div class="ref-badge">5</div><h2 class="section-title" style="border:none;padding:0;margin:0;">Export</h2></div>
-        <p class="section-kicker">Getting a slicer-ready file out.</p>
+        <p class="section-kicker">Saving a file your slicer can print.</p>
 
-        <p>Exports always use the model's real orientation — the one from Optimize, or wherever you last left it. Drag-rotating the view is for looking only and never changes what gets saved. In the desktop app, both exports open a Save As dialog; in a browser, the file goes to your usual downloads folder.</p>
+        <p>Exports use the model's orientation from Optimize. Rotating the view with the mouse doesn't change what is saved. The desktop app asks where to save; in a browser, the file goes to your usual downloads folder.</p>
 
         <h4 class="control-title">Raise base to Z</h4>
-        <p>Offsets the <em>exported copy's</em> Z so its lowest point sits at this height instead of 0 — the model on screen is never touched, since Optimize and Fill both depend on it always resting at Z=0. Meant for a breakaway support or interface layer you'll print as a separate raft below. Many slicers auto-drop imported objects back onto the bed regardless of a file's own coordinates — check your slicer's placement behavior if the offset doesn't seem to stick, and use the <strong>Preview</strong> button to see the raise applied to the live view first.</p>
+        <p>Raises the exported model so its lowest point sits at this height instead of on the plate — for printing a separate breakaway support or interface layer below it. Only the saved file is raised; the model on screen stays on the plate. <strong>Preview</strong> shows the raise on screen first. Many slicers drop a loaded model back onto the plate anyway; check your slicer if the height doesn't stick.</p>
 
         <h4 class="control-title">Export STL</h4>
-        <p>Every mesh this app builds internally is a non-indexed triangle soup — geometrically closed, but with no triangle sharing a vertex with its neighbor. Left as-is, some slicers' manifold checkers misread that as open edges even though nothing is actually missing. Export welds the geometry by position into a properly indexed mesh first — a boundary between two differently-colored regions stays deliberately split, since a single vertex can't be two colors at once.</p>
+        <p>Saves the model as an STL file, which any slicer can open. STL has no colors; for a print in several colors, use Export 3MF. The file is saved as one closed solid, so the slicer doesn't report open edges.</p>
+        <p class="howto"><strong>How it works:</strong> inside the app, every triangle keeps its own copy of its corners. The export joins triangles at their shared corners (welding), which is what makes a slicer see one closed solid.</p>
 
         <h4 class="control-title">Export 3MF (multi-material)</h4>
-        <p>Saves the model as one closed mesh with each color <strong>painted</strong> onto its own extruder — the same per-triangle painting PrusaSlicer, Bambu Studio and OrcaSlicer write with their own multi-material paint tools. The slicer opens it as a single part with no open edges: the first color on extruder 1, the second on extruder 2, and so on. Reassign extruders in the slicer if needed.</p>
-        <p>Colors follow what's on screen: with subunit colors showing, one color per chain — the overhang marking is left out on purpose so it can't paint part of a chain onto another extruder. With overhang colors showing instead, the two overhang colors are painted. A 3MF you imported keeps its own colors.</p>
-        <p>Slicer painting has codes for at most 15 colors. Beyond that, each color is saved as its own part instead, and slicers will report open edges where the parts meet.</p>
+        <p>Saves the model with its colors, for printing in several colors. Each color goes to its own extruder: the first color to extruder 1, the second to extruder 2, and so on — you can change that in the slicer. The slicer opens it as one part, with no open edges.</p>
+        <p>The colors are what you see: one per chain when subunit colors show, or the two overhang colors when those show. A 3MF you imported keeps its own colors. Up to 15 colors work this way; with more, each color is saved as a separate part, and the slicer reports open edges where they meet.</p>
+        <p><strong>In OrcaSlicer</strong>, set up at least as many filaments as the model has colors <em>before</em> opening the file — colors beyond the number of filaments are lost when it loads. <strong>Bambu Studio</strong> says the file has an invalid configuration and loads only the geometry; the colors still come through.</p>
+        <p class="howto"><strong>How it works:</strong> the colors are painted onto one mesh, the same way PrusaSlicer's, Bambu Studio's and OrcaSlicer's own multi-material paint tools do it.</p>
 
         <h4 class="control-title">Color each chain all the way through (PrusaSlicer)</h4>
-        <p>Painting only colors a model's surface; the slicer decides how deep each color goes. PrusaSlicer limits that with <strong>Maximum width of a segmented region</strong> (Print Settings → Multiple Extruders → Advanced). Its own default is 0, no limit, but Prusa's current profiles for the MK4/MK4S, Core One and XL — the printers that take an MMU3 or several toolheads — set it to 5 mm. Deeper than that, the inside of a chain is printed as a separate region in another extruder's color, with walls of its own around it — in the sliced preview, chains whose inside doesn't match their outside.</p>
-        <p>On by default. The exported 3MF then sets that width to 0 for this model, so each chain is its own color all the way through. On a four-chain test model sliced for the XL, that cut the walls PrusaSlicer printed by more than a third. It applies only to this model and overrides your print profile's value for it; you can still change it per object in PrusaSlicer. Turned off, the file leaves the setting to your profile. Other slicers ignore this entry. OrcaSlicer's printer profiles all keep the same setting at 0, so chains there are colored through already; Bambu Studio's profiles don't set it — if a chain's inside comes out in another color there, look for the same setting by name. It only applies to painted exports (up to 15 colors).</p>
+        <p>On by default. Keeps each chain one color all the way through, inside and out. Without it, PrusaSlicer with Prusa's profiles for the MK4/MK4S, Core One and XL prints the inside of thick chains in another color, with extra walls around it — in the sliced preview, chains whose inside doesn't match their outside. On a four-chain test model sliced for the XL, this cut the printed walls by more than a third.</p>
+        <p>It applies only to this model, and you can still change it in PrusaSlicer. Other slicers ignore it: OrcaSlicer colors chains through already, and in Bambu Studio, if a chain's inside comes out in another color, look for the setting named below.</p>
+        <p class="howto"><strong>How it works:</strong> the file sets PrusaSlicer's <strong>Maximum width of a segmented region</strong> (Print Settings → Multiple Extruders → Advanced) to 0 for this model. PrusaSlicer's own default is 0, no limit, but Prusa's profiles for those printers set it to 5&nbsp;mm; deeper than that, a chain's inside becomes a separate region. Only for colored exports of up to 15 colors.</p>
 
-        <h4 class="control-title">Close gaps narrower than the nozzle (PrusaSlicer)</h4>
-        <p>On by default. Sets PrusaSlicer's <strong>Slice gap closing radius</strong> (Print Settings → Advanced → Slicing) to 0.2 mm for this model, instead of its default 0.049 mm, so each layer closes any gap narrower than 0.4 mm — narrower than a 0.4 mm nozzle could print anyway.</p>
-        <p>It matters after filling cavities. A seal fills its pocket almost to the wall, but at a pocket's narrow tip it can leave a pinhole a few tenths of a millimetre wide, which PrusaSlicer prints as a tiny closed pocket with walls of its own — a small loose-looking ring in the sliced layers. Closing gaps that narrow removes them. It also closes equally narrow slits in the outer surface and adds a little print time, about 1% on a test print. It applies only to this model and overrides your print profile's value for it. Other slicers ignore this entry; OrcaSlicer and Bambu Studio have a setting of the same name. It applies to exports of up to 15 colors.</p>
       </section>
 
       <!-- ============ CONCEPTS ============ -->
       <section class="doc-section" id="concepts">
         <h2 class="section-title">Concepts</h2>
-        <p class="section-kicker">The ideas behind the controls, for when "what does this actually compute" comes up.</p>
+        <p class="section-kicker">The technical background behind the controls, for anyone curious what they actually compute.</p>
 
         <dl>
           <div class="glossary-term">
@@ -809,14 +830,17 @@ To target size:     f = target / (current size along the chosen axis)</div>
         <h2 class="section-title">Tips &amp; Best Practices</h2>
 
         <h3 class="sub-title">Working with very large structures</h3>
-        <p>Leave the import resolution on Auto, and check <strong>Use low-res proxy</strong> before running Optimize once the model is past roughly 20,000 triangles (the app will suggest this automatically). Both keep the heavy O(n&sup2;)-class computations — direct orientation cost evaluation especially — off a full-resolution mesh where they'd be impractically slow, without changing the final exported geometry at all.</p>
+        <p>Leave the surface detail on Auto, and let Optimize search on a simplified copy (Quick start does this by itself; the app suggests it past about 20,000 triangles). Both keep the slowest calculations off the full model, without changing the model you export.</p>
         <p>While a long step runs, the status line shows roughly how much time is left, once the step is far enough along to estimate it. A low critical overhang angle makes Optimize noticeably slower (see <a href="#ref-4">Critical overhang angle</a>).</p>
 
         <h3 class="sub-title">Small floating pieces in the slicer</h3>
         <p>Look at <strong>Ligands &amp; ions found</strong> in section 1: a loose ion or crystallization additive sitting apart from the structure prints as its own tiny fragment. Uncheck it and Apply. (Water, the most common cause, is already excluded.)</p>
 
+        <h3 class="sub-title">A small hollow left after Fill</h3>
+        <p>Two kinds of empty space can remain after <strong>Fill selected cavities</strong>. Thin gaps between touching chains, too thin for the detection grid to see, are left on purpose: they print as a clear edge between subunits. And rarely, filling a cavity closes the wide opening of a chamber next to it that is still joined to the outside by a slit thinner than one print layer. The slicer then prints that chamber as a small hollow — in tests on 11 structures, one such hollow of about 19&nbsp;mm³ remained, in a 100&nbsp;mm print. Neither is a loose piece; both print as a hollow with walls of their own.</p>
+
         <h3 class="sub-title">If a tunnel gets skipped</h3>
-        <p>A "too thin to seal" message now only happens for tunnels thinner than about three detection voxels. Raise <strong>Void detection resolution</strong> a tier or two and run <strong>Find tunnels</strong> again.</p>
+        <p>Tunnels narrower than about three grid cubes are skipped. Raise <strong>Void detection resolution</strong> a step or two and click <strong>Find tunnels</strong> again.</p>
 
         <h3 class="sub-title">STL or 3MF?</h3>
         <div class="tbl-wrap">
@@ -829,7 +853,7 @@ To target size:     f = target / (current size along the chosen axis)</div>
         </div>
 
         <h3 class="sub-title">Undo is one step</h3>
-        <p>If you're trying a few different Fill or Optimize choices to compare, export a copy of each result you might want to keep before moving on — Undo only reverses the single most recent mutating operation.</p>
+        <p>If you're comparing a few different Fill or Optimize choices, export a copy of each result you might want to keep before moving on — Undo only takes back the most recent step.</p>
       </section>
 
       <!-- ============ FAQ ============ -->
@@ -842,11 +866,11 @@ To target size:     f = target / (current size along the chosen axis)</div>
         </div>
         <div class="faq-item">
           <div class="faq-q">My slicer says the exported file has open edges — is something wrong?</div>
-          <p class="faq-a">Unlikely — see <a href="#ref-5">Export STL</a>. The app welds the mesh into a properly indexed form specifically to avoid this, but a slicer's manifold checker can occasionally still be strict about very thin, sharp features regardless of source. If it persists, try raising the resolution the affected region was built or sealed at. A 3MF with more than 15 colors is the exception: it's saved as one part per color, and the borders between parts are open by design (see <a href="#ref-5">Export 3MF</a>).</p>
+          <p class="faq-a">Unlikely — see <a href="#ref-5">Export STL</a>. Exports are saved as one closed solid to avoid exactly this, but a slicer can still be strict about very thin, sharp features. If it persists, try a higher surface detail or detection setting. A 3MF with more than 15 colors is the exception: it's saved as one part per color, and the borders between parts are open (see <a href="#ref-5">Export 3MF</a>).</p>
         </div>
         <div class="faq-item">
           <div class="faq-q">Why didn't Fill change how the model looks?</div>
-          <p class="faq-a">By design — Fill only ever adds material fully inside an existing cavity or tunnel, never touches the visible exterior. The change is real (check the triangle count and the status message after filling) but everything it added is, by construction, invisible from outside.</p>
+          <p class="faq-a">By design — Fill only adds material inside cavities and tunnels and never changes the outside. The change is real (see the status message after filling), but you can only see it with the cross-section.</p>
         </div>
         <div class="faq-item">
           <div class="faq-q">Optimize picked an orientation that still shows red (overhang) triangles — is that a bug?</div>
@@ -854,7 +878,7 @@ To target size:     f = target / (current size along the chosen axis)</div>
         </div>
         <div class="faq-item">
           <div class="faq-q">A tunnel I found is enormous — should I fill it?</div>
-          <p class="faq-a">Usually not, and above 20% of the model's volume the app won't let you. The cavity/tunnel split is purely topological (does the flood-fill reach the outside or not), so a single "tunnel" can be the entire open space between several distant chains rather than a small local gap. A tight seam-level tunnel is usually worth sealing; a huge one spanning most of the interior usually isn't.</p>
+          <p class="faq-a">Usually not, and above 20% of the model's volume the app won't let you. A tunnel is any empty space reachable from outside within the model's outline, so a single "tunnel" can be all the open space between several distant chains rather than a small gap. A narrow tunnel at a seam is often worth filling; a huge one usually isn't.</p>
         </div>
         <div class="faq-item">
           <div class="faq-q">I loaded a 3MF and it's all gray.</div>
@@ -867,7 +891,7 @@ To target size:     f = target / (current size along the chosen axis)</div>
       </section>
 
       <footer class="docfoot">
-        Support Optimizer &middot; manual updated for v1.0.12. If this page and an in-app "?" help panel ever disagree, the in-app text is closer to the running code.
+        Support Optimizer &middot; manual updated for v1.1.0. If this page and an in-app "?" help panel ever disagree, the in-app text is closer to the running code.
       </footer>
 
     </div>

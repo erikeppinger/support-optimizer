@@ -1,11 +1,20 @@
 // Newest first. The welcome dialog shows the first few; copy the top entry's
-// items into releaseBody in .github/workflows/release.yml when tagging.
+// items into RELEASE_BODY in .github/workflows/release.yml when tagging.
 export interface ReleaseNotes {
   version: string;
   items: string[];
 }
 
 export const WHATS_NEW: ReleaseNotes[] = [
+  {
+    version: "1.1.0",
+    items: [
+      "New: <strong>Quick start</strong> and <strong>All settings</strong>. Quick start shows each step's main buttons with good defaults; All settings shows every control. The welcome dialog asks which you prefer, and a switch at the top of the panel changes it any time.",
+      "Optimize can now also cut down color changes for prints in several colors. Least support turns the model so it needs the least support material; Fewest tool changes turns it so the printer switches colors less often, which saves time and purged filament; Balanced weighs both. The status line shows how many changes the print needs before and after.",
+      "Find cavities now also finds very small empty spaces sealed inside a single chain. They are closed on all sides, so you can't see them from outside, but the slicer would print each one as a tiny hollow space. Fill makes them solid. Grooves and pockets that are open to the surface are never touched.",
+      "Fill leaves far fewer hollow spaces inside the print. Filling a cavity close to the outer wall could trap a thin empty gap between the fill and the wall; Fill now finds those and fills them too. The \"Close gaps narrower than the nozzle\" export option is removed, because it trapped new empty spaces instead of closing gaps.",
+    ],
+  },
   {
     version: "1.0.12",
     items: [

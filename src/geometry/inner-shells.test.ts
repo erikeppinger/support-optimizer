@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { findInnerShells, insideShell, planInnerShellFills } from "./inner-shells";
+import { findInnerShells, insideShell, planInnerShellFills, addInnerShellCavities } from "./inner-shells";
 import { voxelizeSurface, fillInterior } from "./voxelize";
 import { detectVoidComponentsFull } from "./detect-voids";
 
@@ -68,5 +68,45 @@ describe("planInnerShellFills", () => {
     const plan = planInnerShellFills(position, grid, cavities, new Set(cavities.map((c) => c.id)));
     expect(plan.removedTriangles).toHaveLength(0);
     expect(plan.filledByRemoval.size).toBe(0);
+  });
+});
+
+describe("addInnerShellCavities", () => {
+  // Detection grid of 20 voxels along the 10 mm box: 0.5 mm voxels.
+  function detect(position: Float32Array) {
+    const grid = voxelizeSurface(position, 20);
+    fillInterior(grid, position);
+    return { grid, components: detectVoidComponentsFull(grid).components };
+  }
+
+  it("lists a pocket too small for the grid, and fills it by removing its skin", () => {
+    // A 0.4 mm pocket sitting between voxel centers: no empty voxel to find.
+    const position = concat(boxSoup(10, [0, 0, 0]), boxSoup(0.4, [0.1, 0.1, 0.1], true));
+    const { grid, components } = detect(position);
+    expect(components.filter((c) => c.kind === "cavity")).toHaveLength(0);
+
+    const all = addInnerShellCavities(position, grid, components);
+    const cavities = all.filter((c) => c.kind === "cavity");
+    expect(cavities).toHaveLength(1);
+    expect(cavities[0].innerShell).toBe(0);
+    expect(cavities[0].voxels).toHaveLength(0);
+
+    const plan = planInnerShellFills(position, grid, all, new Set([cavities[0].id]));
+    expect(plan.filledByRemoval.has(cavities[0].id)).toBe(true);
+    expect(plan.removedTriangles).toHaveLength(12);
+  });
+
+  it("leaves out bubbles far smaller than a voxel", () => {
+    const position = concat(boxSoup(10, [0, 0, 0]), boxSoup(0.1, [0.1, 0.1, 0.1], true));
+    const { grid, components } = detect(position);
+    expect(addInnerShellCavities(position, grid, components).filter((c) => c.kind === "cavity")).toHaveLength(0);
+  });
+
+  it("doesn't list a pocket the grid already found a second time", () => {
+    const position = concat(boxSoup(10, [0, 0, 0]), boxSoup(4, [0, 0, 0], true));
+    const { grid, components } = detect(position);
+    const before = components.filter((c) => c.kind === "cavity").length;
+    expect(before).toBe(1);
+    expect(addInnerShellCavities(position, grid, components).filter((c) => c.kind === "cavity")).toHaveLength(before);
   });
 });

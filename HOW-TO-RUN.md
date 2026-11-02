@@ -83,6 +83,7 @@ You should see the app: a dark viewer panel with a controls panel on the left. T
 ## Using the app
 
 - **Load a structure:** either type a 4-character PDB ID (e.g. `6LU7`) and click Fetch, or click "Browse for a file…" to load your own `.stl`, `.pdb`, `.cif`, or `.3mf` file.
+- The first time you open it, the welcome dialog asks whether you want **Quick start** (the main buttons for each step, with good defaults) or **All settings** (every control). You can switch any time at the top of the panel.
 - Every section on the left has a small **"?"** button next to it — click one any time for a plain explanation of what that control does and how it's computed. It opens in a panel on the right.
 - Nothing you do here is saved anywhere outside your own browser tab — closing the tab discards your session (export whatever you want to keep first, via the Export buttons at the bottom).
 

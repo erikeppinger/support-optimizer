@@ -1,11 +1,13 @@
 import * as THREE from "three";
 import { searchBestOrientation, evaluateOrientationCost } from "../geometry/orientation-search";
+import type { OptimizeFor } from "../geometry/orientation-search";
+import { countToolChanges } from "../geometry/tool-changes";
 import { voxelizeSurface, fillInterior } from "../geometry/voxelize";
-import { detectVoidComponents, detectVoidComponentsFull, summarize, buildCavityHighlightMesh, buildSealContext, buildSealPatchMesh } from "../geometry/detect-voids";
+import { detectVoidComponents, summarize, buildCavityHighlightMesh } from "../geometry/detect-voids";
 import type { VoidComponentSummary, ComponentHighlightMesh } from "../geometry/detect-voids";
 import { marchingCubes } from "../geometry/marching-cubes";
-import { planInnerShellFills } from "../geometry/inner-shells";
-import { snapSealsToWalls } from "../geometry/snap-seal";
+import { addInnerShellCavities, innerShellHighlightMesh, findInnerShells } from "../geometry/inner-shells";
+import { fillVoids } from "../geometry/fill-voids";
 import { buildChainMeshes, DEFAULT_PROBE_RADIUS, parsePDBAtoms } from "../geometry/pdb";
 import type { Atom, ChainMeshEntry } from "../geometry/pdb";
 import { parseCIFAtoms } from "../geometry/mmcif";
@@ -27,6 +29,11 @@ export interface OrientationSearchRequest {
    * fine surface feature, not the mesh's dominant overhang shape.
    */
   proxyResolution?: number;
+  /** One color index per triangle of `position` (see
+   * triangleColorIndices), when the model has 2+ colors; tool changes are
+   * then counted, and `optimizeFor` can weigh them in. */
+  triColor?: Uint8Array;
+  optimizeFor?: OptimizeFor;
 }
 
 export interface DetectVoidsRequest {
@@ -107,6 +114,9 @@ export type WorkerResponse =
       afterCost: number;
       usedProxy: boolean;
       proxyTriangleCount?: number;
+      /** Estimated tool changes before and after; null without colors. */
+      beforeToolChanges: number | null;
+      afterToolChanges: number | null;
     }
   | { type: "voids-detected"; components: VoidComponentSummary[]; voxelSize: number; highlights: ComponentHighlightMesh[] }
   | {
@@ -128,6 +138,14 @@ export type WorkerResponse =
        * patch and aren't listed. */
       sealedIds: number[];
       sealedVertexCounts: number[];
+      /** World-space centroid per patch (x, y, z flattened), parallel to
+       * sealedVertexCounts — for coloring each patch by its nearest chain.
+       * Patches for pockets the fill itself closed off come last; they have
+       * no entry in the detection list, so their id in sealedIds is -1. */
+      sealedCentroids: number[];
+      /** How many of those fill pockets the seals had closed off (see
+       * fillEnclosedNearSeals). */
+      closedOffCount: number;
       /** Triangles of the input mesh to delete: the inner surfaces of
        * cavities enclosed by a single chain, which fills them exactly. */
       removedTriangles: Int32Array;
@@ -205,8 +223,15 @@ ctx.onmessage = (e: MessageEvent<WorkerRequest>) => {
       msg.criticalAngleDeg,
     ).cost;
 
+    const toolChangeMesh = msg.triColor ? { position: msg.position, triColor: msg.triColor } : undefined;
+    const beforeToolChanges = toolChangeMesh
+      ? countToolChanges(toolChangeMesh.position, toolChangeMesh.triColor, new THREE.Vector3(0, 0, 1))
+      : null;
+
     const result = searchBestOrientation(searchPosition, searchNormal, {
       criticalAngleDeg: msg.criticalAngleDeg,
+      optimizeFor: msg.optimizeFor,
+      toolChangeMesh,
       onProgress: (fraction) => {
         ctx.postMessage({ type: "progress", fraction: progressOffset + fraction * progressScale } satisfies WorkerResponse);
       },
@@ -219,6 +244,8 @@ ctx.onmessage = (e: MessageEvent<WorkerRequest>) => {
       afterCost: result.cost,
       usedProxy,
       proxyTriangleCount,
+      beforeToolChanges,
+      afterToolChanges: toolChangeMesh ? result.toolChanges : null,
     } satisfies WorkerResponse);
     return;
   }
@@ -229,7 +256,10 @@ ctx.onmessage = (e: MessageEvent<WorkerRequest>) => {
     fillInterior(grid, msg.position);
 
     ctx.postMessage({ type: "progress", fraction: 0.6 } satisfies WorkerResponse);
-    const components = detectVoidComponents(grid);
+    // Pockets inside one chain too small for the grid are found as the
+    // mesh's own closed inner skins (see addInnerShellCavities).
+    const innerShells = findInnerShells(msg.position);
+    const components = addInnerShellCavities(msg.position, grid, detectVoidComponents(grid), innerShells);
 
     // Highlight meshes for both cavities and tunnels now (both fillable —
     // see buildSealPatchMesh), capped at the largest 20 of EACH kind —
@@ -247,7 +277,9 @@ ctx.onmessage = (e: MessageEvent<WorkerRequest>) => {
     for (const c of components) {
       if (c.kind === "cavity" && cavityHighlightCount >= MAX_HIGHLIGHTS_PER_KIND) continue;
       if (c.kind === "tunnel" && tunnelHighlightCount >= MAX_HIGHLIGHTS_PER_KIND) continue;
-      const mesh = buildCavityHighlightMesh(grid, c);
+      const mesh = c.innerShell !== undefined
+        ? innerShellHighlightMesh(msg.position, innerShells[c.innerShell], c.id)
+        : buildCavityHighlightMesh(grid, c);
       highlights.push(mesh);
       transferBuffers.push(mesh.position.buffer, mesh.normal.buffer);
       if (c.kind === "cavity") cavityHighlightCount++;
@@ -359,60 +391,12 @@ ctx.onmessage = (e: MessageEvent<WorkerRequest>) => {
   // from its walls) and returns just those patch triangles; the
   // caller concatenates them onto the UNCHANGED original exterior geometry.
   ctx.postMessage({ type: "progress", fraction: 0.2 } satisfies WorkerResponse);
-  const grid = voxelizeSurface(msg.position, msg.resolution);
-  fillInterior(grid, msg.position);
-
-  ctx.postMessage({ type: "progress", fraction: 0.5 } satisfies WorkerResponse);
-  const { components, reached } = detectVoidComponentsFull(grid);
-  const sealCtx = buildSealContext(grid, reached);
-  const selectedIds = new Set(msg.selectedCavityIds);
-
-  const patchPositions: Float32Array[] = [];
-  const patchNormals: Float32Array[] = [];
-  let filledVoxelCount = 0;
-  let sealedCount = 0;
-  let skippedCount = 0;
-  // Parallel to each other and to the order patches land in
-  // patchPosition/patchNormal — lets the caller recover per-cavity vertex
-  // ranges (e.g. to color each sealed patch by whichever chain it's
-  // nearest to, rather than one flat color for the whole batch).
-  const sealedIds: number[] = [];
-  const sealedVertexCounts: number[] = [];
-  const cavitySeals: ComponentHighlightMesh[] = [];
-  const patches: ComponentHighlightMesh[] = [];
-
-  // Cavities enclosed by one chain are filled by deleting their inner
-  // surface instead of sealing them (see planInnerShellFills).
-  const { removedTriangles, filledByRemoval: fullyEnclosed } = planInnerShellFills(msg.position, grid, components, selectedIds);
-
-  for (const c of components) {
-    if (!selectedIds.has(c.id)) continue;
-    if (fullyEnclosed.has(c.id)) {
-      filledVoxelCount += c.voxelCount;
-      sealedCount++;
-      continue;
-    }
-    const patch = buildSealPatchMesh(grid, c, sealCtx);
-    if (!patch) {
-      skippedCount++;
-      continue;
-    }
-    if (c.kind === "cavity") cavitySeals.push(patch);
-    patches.push(patch);
-    filledVoxelCount += c.voxelCount;
-    sealedCount++;
-    sealedIds.push(c.id);
-  }
-
-  // Close the slivers cavity seals leave against walls they can't overlap.
-  const removedMask = new Uint8Array(msg.position.length / 9);
-  for (const t of removedTriangles) removedMask[t] = 1;
-  snapSealsToWalls(cavitySeals, msg.position, grid.voxelSize, removedMask);
-  for (const patch of patches) {
-    patchPositions.push(patch.position);
-    patchNormals.push(patch.normal);
-    sealedVertexCounts.push(patch.position.length / 3);
-  }
+  const {
+    patchPositions, patchNormals, filledVoxelCount, sealedCount, skippedCount,
+    sealedIds, sealedVertexCounts, sealedCentroids, closedOffCount, removedTriangles,
+  } = fillVoids(msg.position, msg.resolution, new Set(msg.selectedCavityIds), (fraction) =>
+    ctx.postMessage({ type: "progress", fraction } satisfies WorkerResponse),
+  );
 
   ctx.postMessage({ type: "progress", fraction: 0.8 } satisfies WorkerResponse);
   const totalFloats = patchPositions.reduce((sum, p) => sum + p.length, 0);
@@ -426,7 +410,7 @@ ctx.onmessage = (e: MessageEvent<WorkerRequest>) => {
   }
 
   ctx.postMessage(
-    { type: "cavity-result", patchPosition, patchNormal, filledVoxelCount, sealedCount, skippedCount, sealedIds, sealedVertexCounts, removedTriangles } satisfies WorkerResponse,
+    { type: "cavity-result", patchPosition, patchNormal, filledVoxelCount, sealedCount, skippedCount, sealedIds, sealedVertexCounts, sealedCentroids, closedOffCount, removedTriangles } satisfies WorkerResponse,
     [patchPosition.buffer, patchNormal.buffer, removedTriangles.buffer],
   );
 };

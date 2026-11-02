@@ -1,6 +1,12 @@
 import * as THREE from "three";
 import { leanAngleDegrees } from "./overhang-cost";
 import { raycastNearest } from "./raycast";
+import { countToolChanges } from "./tool-changes";
+
+/** What the search minimizes. "support" is support cost alone (with the
+ * stability term); "balanced" weighs support and tool changes equally;
+ * "tool-changes" minimizes tool changes, with support as a tie-breaker. */
+export type OptimizeFor = "support" | "balanced" | "tool-changes";
 
 export interface SearchOptions {
   criticalAngleDeg: number;
@@ -9,12 +15,19 @@ export interface SearchOptions {
   refineGridSize?: number;
   refineAngleRadiusDeg?: number;
   onProgress?: (fraction: number) => void;
+  optimizeFor?: OptimizeFor;
+  /** Needed for any optimizeFor other than "support": the full-resolution
+   * mesh and one color index per triangle (see triangleColorIndices). Kept
+   * separate from `position`, which may be a colorless proxy. */
+  toolChangeMesh?: { position: Float32Array; triColor: Uint8Array };
 }
 
 export interface OrientationCandidate {
   up: THREE.Vector3;
   cost: number;
   contactArea: number;
+  /** Estimated tool changes; 0 when not counted. */
+  toolChanges: number;
 }
 
 const DEFAULT_COARSE_SAMPLES = 32;
@@ -225,7 +238,12 @@ export interface SearchResult {
   up: THREE.Vector3;
   cost: number;
   contactArea: number;
+  toolChanges: number;
 }
+
+/** Weight of support in "tool-changes" mode: enough to break ties between
+ * orientations with about the same number of changes, not more. */
+const SUPPORT_TIE_BREAK_WEIGHT = 0.1;
 
 /** Coarse sphere search followed by local refinement around the best few
  * candidates. Synchronous and CPU-heavy — intended to run inside a Worker. */
@@ -241,11 +259,35 @@ export function searchBestOrientation(
     refineGridSize = DEFAULT_REFINE_GRID_SIZE,
     refineAngleRadiusDeg = DEFAULT_REFINE_ANGLE_RADIUS_DEG,
     onProgress,
+    toolChangeMesh,
   } = options;
+  const optimizeFor = toolChangeMesh ? options.optimizeFor ?? "support" : "support";
 
   const stabilityWeight = STABILITY_WEIGHT_FRACTION * computeBoundingRadius(position);
-  const compareCandidates = (a: OrientationCandidate, b: OrientationCandidate) =>
-    scoreOf(a, stabilityWeight) - scoreOf(b, stabilityWeight);
+  const evaluate = (up: THREE.Vector3): OrientationCandidate => {
+    const { cost, contactArea } = evaluateOrientationCost(position, normal, up, criticalAngleDeg);
+    const toolChanges = toolChangeMesh ? countToolChanges(toolChangeMesh.position, toolChangeMesh.triColor, up) : 0;
+    return { up, cost, contactArea, toolChanges };
+  };
+  // Support score and tool changes are in different units, so in the
+  // combined modes each is scaled to 0..1 across the candidates evaluated
+  // so far before they are added.
+  const rankAll = (list: OrientationCandidate[]) => {
+    if (optimizeFor === "support") {
+      list.sort((a, b) => scoreOf(a, stabilityWeight) - scoreOf(b, stabilityWeight));
+      return;
+    }
+    const support = list.map((c) => scoreOf(c, stabilityWeight));
+    const changes = list.map((c) => c.toolChanges);
+    const norm = (values: number[]) => {
+      const lo = Math.min(...values), hi = Math.max(...values);
+      return values.map((v) => (hi > lo ? (v - lo) / (hi - lo) : 0));
+    };
+    const s = norm(support), t = norm(changes);
+    const weightOfSupport = optimizeFor === "balanced" ? 1 : SUPPORT_TIE_BREAK_WEIGHT;
+    const score = new Map(list.map((c, i) => [c, t[i] + weightOfSupport * s[i]]));
+    list.sort((a, b) => score.get(a)! - score.get(b)!);
+  };
 
   // Only the Fibonacci sphere sweep gets the random per-run rotation —
   // AXIS_ALIGNED_DIRECTIONS stays fixed at the file's own true ±X/±Y/±Z,
@@ -263,24 +305,23 @@ export function searchBestOrientation(
   let done = 0;
 
   const candidates: OrientationCandidate[] = coarseDirs.map((up) => {
-    const { cost, contactArea } = evaluateOrientationCost(position, normal, up, criticalAngleDeg);
+    const candidate = evaluate(up);
     done++;
     onProgress?.(done / totalSteps);
-    return { up, cost, contactArea };
+    return candidate;
   });
 
-  candidates.sort(compareCandidates);
+  rankAll(candidates);
   const top = candidates.slice(0, refineTopK);
 
   for (const candidate of top) {
     for (const up of sampleCapAround(candidate.up, refineGridSize, refineAngleRadiusDeg)) {
-      const { cost, contactArea } = evaluateOrientationCost(position, normal, up, criticalAngleDeg);
-      candidates.push({ up, cost, contactArea });
+      candidates.push(evaluate(up));
       done++;
       onProgress?.(done / totalSteps);
     }
   }
 
-  candidates.sort(compareCandidates);
+  rankAll(candidates);
   return candidates[0];
 }
