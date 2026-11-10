@@ -38,3 +38,6 @@ test/
 
 # Personal lab notes, not published
 docs/LAB_NOTES.*
+
+# Claude Code stores approved commands here, which can include secrets
+.claude/settings.local.json
