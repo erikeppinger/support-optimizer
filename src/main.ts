@@ -89,16 +89,16 @@ app.innerHTML = `
       <div class="field-label"><label for="import-resolution">PDB/mmCIF surface detail:</label>${help(
         `How fine the surface of a protein (.pdb or .cif file) is built. Higher shows more detail, such as small grooves, but takes longer to load. STL and 3MF files are loaded as they are and don't use this.<br><br>
         <strong>Auto</strong> uses less detail for very large structures so loading stays fast — a fixed high value on a structure with hundreds of thousands of atoms can take minutes. Pick a fixed value to get the same detail for every structure, or more detail than Auto would choose.<br><br>
-        <strong>How it works:</strong> the molecular surface (solvent-excluded surface) is built on a grid with this many points per axis, then turned into triangles.`,
+        <strong>How it works:</strong> the molecular surface (solvent-excluded surface) is built on a grid of 70 to 240 points per axis, from Low to Maximum, then turned into triangles.`,
       )}</div>
       <select id="import-resolution">
         <option value="auto" selected>Auto (scales with atom count)</option>
-        <option value="70">Low (70&sup3;)</option>
-        <option value="90">Medium (90&sup3;)</option>
-        <option value="110">High (110&sup3;)</option>
-        <option value="130">Very high (130&sup3;)</option>
-        <option value="180">Extreme (180&sup3;) — slow on large structures</option>
-        <option value="240">Maximum (240&sup3;) — slow on large structures</option>
+        <option value="70">Low</option>
+        <option value="90">Medium</option>
+        <option value="110">High</option>
+        <option value="130">Very high</option>
+        <option value="180">Extreme — slow on large structures</option>
+        <option value="240">Maximum — slow on large structures</option>
       </select>
       </div>
       <input type="file" id="file-input" accept=".stl,.pdb,.3mf,.cif" style="display:none" />
@@ -171,7 +171,7 @@ app.innerHTML = `
       <div class="field-label quick-only"><label for="scale-target">Print size, longest side (mm):</label></div>
       <div id="scale-absolute-row" class="input-row" style="display:none">
         <select id="scale-axis" class="adv">
-          <option value="largest" selected>Largest dim</option>
+          <option value="largest" selected>Longest side</option>
           <option value="x">X</option>
           <option value="y">Y</option>
           <option value="z">Z</option>
@@ -212,34 +212,34 @@ app.innerHTML = `
     </details>
 
     <details id="section-cavities">
-      <summary>3. Voids &amp; cavities</summary>
+      <summary>3. Cavities &amp; tunnels</summary>
       <div class="adv">
-      <div class="field-label"><label for="cavity-resolution">Void detection resolution:</label>${help(
+      <div class="field-label"><label for="cavity-resolution">Detection detail:</label>${help(
         `How small a cavity can be and still be found. Higher finds smaller and narrower cavities, and the filling follows their shape more closely, but it takes longer. Medium suits most prints.<br><br>
         Small cavities inside a single chain are found at any setting (see Find cavities).<br><br>
         It also matters for large prints. A cavity joined to the outside only by a very narrow slit counts as closed, and filling it closes the slit as well. At Medium, slits narrower than about 1/64 of the model's longest side count as closed; at High, 1/128. So for a large print, a higher setting keeps more of the surface's fine detail open.<br><br>
-        <strong>How it works:</strong> the model is divided into a grid of small cubes (voxels), this many along its longest side, and the empty ones are checked. Cavities and Tunnels use the same grid.`,
+        <strong>How it works:</strong> the model is divided into a grid of small cubes (voxels), from 32 along its longest side at Low to 320 at Maximum (64 at Medium), and the empty ones are checked. Cavities and Tunnels use the same grid.`,
       )}</div>
       <select id="cavity-resolution">
-        <option value="32">Low (32&sup3;)</option>
-        <option value="64" selected>Medium (64&sup3;)</option>
-        <option value="128">High (128&sup3;)</option>
-        <option value="192">Very high (192&sup3;)</option>
-        <option value="256">Extreme (256&sup3;)</option>
-        <option value="320">Maximum (320&sup3;) — slow</option>
+        <option value="32">Low — fastest</option>
+        <option value="64" selected>Medium</option>
+        <option value="128">High</option>
+        <option value="192">Very high</option>
+        <option value="256">Extreme</option>
+        <option value="320">Maximum — slow</option>
       </select>
       </div>
       <div class="void-group">
         <div class="void-group-title">Cavities <span class="void-group-sub">— empty spaces closed off inside the model</span></div>
         <div class="void-row adv">
           <input type="checkbox" id="cavity-threshold-custom" />
-          <label for="cavity-threshold-custom">Custom auto-select size limit (default: select all cavities)</label>${help(
+          <label for="cavity-threshold-custom">Only check cavities up to a size I set</label>${help(
             `Normally every cavity found is checked for filling. Turn this on to check only cavities up to the size you set — for example to leave large cavities open. You can still check or uncheck each cavity in the list yourself.`,
           )}
         </div>
         <div class="input-row adv" id="cavity-threshold-row" style="display:none">
           <input type="range" id="cavity-threshold-slider" min="1" max="10000" step="1" value="1000" />
-          <span id="cavity-threshold-value">≤ 1,000 voxels</span>
+          <span id="cavity-threshold-value">≤ 1,000 grid cubes</span>
         </div>
         <button id="detect-cavities-btn" disabled>Find cavities</button>${help(
           `Finds <strong>cavities</strong>: empty spaces closed off on all sides inside the model, with no opening to the outside. You can't see them from outside, but the slicer prints each one as a hollow space with walls of its own, and any support it puts inside can never be removed. Fill can make them solid.<br><br>
@@ -250,7 +250,7 @@ app.innerHTML = `
         )}
         <div class="void-row adv">
           <input type="checkbox" id="show-void-highlights" checked />
-          <label for="show-void-highlights">Highlight on model (<span id="highlight-include-name">magenta</span> = will fill, orange = excluded)</label>${help(
+          <label for="show-void-highlights">Highlight on model (<span id="highlight-include-name">magenta</span> = will be filled, orange = left open)</label>${help(
             `Shows the cavities and tunnels inside the model: magenta ones will be filled (green with colorblind-safe colors on), orange ones are left as they are. The model turns see-through so you can see them. The 20 largest of each are shown.`,
           )}
         </div>
@@ -278,7 +278,7 @@ app.innerHTML = `
 
     <details id="section-optimize">
       <summary>4. Optimize orientation</summary>
-      <div class="slider-label adv"><label for="critical-angle">Critical overhang angle: <span id="critical-angle-value"></span>&deg;</label>${help(
+      <div class="slider-label adv"><label for="critical-angle">Overhang threshold: <span id="critical-angle-value"></span>&deg;</label>${help(
         `How steep an overhang your printer can print without support. A surface that leans further than this from vertical needs support and shows in red. 0&deg; is a vertical wall; 90&deg; is a flat ceiling facing down. Most FDM printers manage about 45&deg;, resin printers often more.<br><br>
         Everything in this step uses this angle: what Optimize minimizes, and where the support preview starts. Changing it recolors the model but never changes its shape.<br><br>
         <strong>Lower angles take longer.</strong> More surfaces count as overhangs, and each one has to be checked — on a test sphere, 30&deg; took about twice as long as 45&deg;, and 15&deg; about three times as long.<br><br>
@@ -296,9 +296,9 @@ app.innerHTML = `
         )}
       </div>
       <select id="proxy-resolution" class="adv">
-        <option value="24">Coarse (24&sup3;)</option>
-        <option value="32" selected>Medium (32&sup3;)</option>
-        <option value="48">Fine (48&sup3;)</option>
+        <option value="24">Coarse</option>
+        <option value="32" selected>Medium</option>
+        <option value="48">Fine</option>
       </select>
       <div class="multi-color-only">
       <div class="field-label"><label for="optimize-for">Optimize for</label>${help(
@@ -354,7 +354,7 @@ or to whatever surface is below it first)</span>
     <details id="section-export">
       <summary>5. Export</summary>
       <div class="void-row-readonly">Exports use the model's orientation from Optimize. Rotating the view with the mouse doesn't change what is saved.</div>
-      <div class="field-label adv"><label for="base-height">Raise base to Z (mm) — for breakaway support/interface layers</label>${help(
+      <div class="field-label adv"><label for="base-height">Raise the model by (mm) — for a support layer printed underneath</label>${help(
         `Raises the exported model so its lowest point sits at this height instead of on the plate — for printing a separate breakaway support or interface layer below it. Only the saved file is raised; the model on screen stays on the plate.<br><br>
         Many slicers drop a loaded model back onto the plate anyway; check your slicer if the height doesn't stick.`,
       )}</div>
@@ -1180,9 +1180,9 @@ function refreshVisualization() {
         supportPathsGroup = buildSupportPathsGroup(result, boundingRadiusOf(targetGeometry));
         currentMesh.add(supportPathsGroup);
       } else if (error) {
-        setStatus(`Support paths failed on this mesh (${error}) — showing the model without them.`, true);
+        setStatus(`The support preview failed (${error}); showing the model without it.`, true);
       } else {
-        setStatus(`Support paths skipped — mesh has too many triangles (over ${SUPPORT_PATH_TRIANGLE_LIMIT.toLocaleString()})`, true);
+        setStatus(`Support preview skipped: the model is too detailed (over ${SUPPORT_PATH_TRIANGLE_LIMIT.toLocaleString()} triangles).`, true);
       }
       updateStatsPanel(currentResult, startResult);
     });
@@ -1296,7 +1296,7 @@ function renderVoidGroupList(container: HTMLDivElement, kind: "cavity" | "tunnel
     // distant parts of the structure (see OVERSIZED_VOID_FRACTION).
     const sizeLabel = percentOfModel >= 1
       ? `${percentOfModel.toFixed(0)}% of model`
-      : `${c.voxelCount.toLocaleString()} voxels (~${volumeMm3.toFixed(1)} mm³)`;
+      : formatVolume(volumeMm3);
     row.append(` ${label} — ${sizeLabel}`);
     if (oversized) {
       const warning = document.createElement("span");
@@ -1439,7 +1439,7 @@ undoBtnEl.addEventListener("click", () => {
   undoPoint = null;
   updateUndoButtonState();
   refreshVisualization();
-  setStatus(`Undid last ${label}.`);
+  setStatus(`Took back the last ${label}.`);
   logEvent(`Undid ${label}`);
 });
 
@@ -1544,9 +1544,21 @@ showVoidHighlightsEl.addEventListener("change", updateShellTransparency);
 cavityThresholdCustomEl.addEventListener("change", () => {
   cavityThresholdRowEl.style.display = cavityThresholdCustomEl.checked ? "flex" : "none";
 });
-cavityThresholdSliderEl.addEventListener("input", () => {
-  cavityThresholdValueEl.textContent = `≤ ${Number(cavityThresholdSliderEl.value).toLocaleString()} voxels`;
-});
+/** Volume in mm³ at the model's current size, rounded for reading. */
+function formatVolume(mm3: number): string {
+  const digits = mm3 >= 100 ? 0 : mm3 >= 0.1 ? 1 : 2;
+  return `${mm3.toLocaleString(undefined, { maximumFractionDigits: digits, minimumFractionDigits: digits })} mm³`;
+}
+
+/** The size-limit slider counts detection grid cubes; once cavities have
+ * been found, the grid's cube size is known and the limit reads in mm³. */
+function updateThresholdLabel() {
+  const cubes = Number(cavityThresholdSliderEl.value);
+  cavityThresholdValueEl.textContent = cavityDetection.voxelSize > 0
+    ? `≤ ${formatVolume(cubes * cavityDetection.voxelSize ** 3)}`
+    : `≤ ${cubes.toLocaleString()} grid cubes`;
+}
+cavityThresholdSliderEl.addEventListener("input", updateThresholdLabel);
 
 showSupportPathsEl.addEventListener("change", refreshVisualization);
 supportStyleSelectEl.addEventListener("change", refreshVisualization);
@@ -1561,7 +1573,7 @@ showSubunitColorsEl.addEventListener("change", () => {
   setStatus(
     showSubunitColorsEl.checked
       ? "Showing subunit colors — one color per chain."
-      : `Showing overhang colors — red marks faces leaning past ${criticalAngleDeg}° that would need support in the current orientation, blue marks self-supporting faces. Not a rendering artifact.`,
+      : `Showing overhang colors: red surfaces lean more than ${criticalAngleDeg}° and need support in this orientation; blue ones print without it.`,
   );
 });
 
@@ -1747,7 +1759,7 @@ function runVoxelizePdb(request: VoxelizePDBRequest, sourceLabel: string, baseNa
       loadedAtoms = msg.atoms;
       populateChainFilter(msg.atoms);
       populateHeteroFilter(msg.atoms);
-      setStatus(`Building surface from ${atomCount.toLocaleString()} atoms (grid ${msg.resolution}³)…`);
+      setStatus(`Building the surface from ${atomCount.toLocaleString()} atoms…`);
       return;
     }
     if (msg.type === "parse-error") {
@@ -1975,6 +1987,16 @@ fetchIdInputEl.addEventListener("keydown", (e) => {
   if (e.key === "Enter") fetchIdBtnEl.click();
 });
 
+/** Support change in words, from the search's before/after cost. */
+function describeSupportChange(before: number, after: number): string {
+  if (before <= 0 && after <= 0) return "no support needed";
+  if (after <= 0) return "no support needed any more";
+  if (before <= 0) return "now needs some support";
+  const change = Math.round((100 * (after - before)) / before);
+  if (change === 0) return "about the same support";
+  return change < 0 ? `about ${-change}% less support` : `about ${change}% more support`;
+}
+
 optimizeBtnEl.addEventListener("click", () => {
   if (!currentMesh || worker) return;
 
@@ -1990,7 +2012,7 @@ optimizeBtnEl.addEventListener("click", () => {
   const optimizeFor = optimizeForEl.value as OptimizeFor;
 
   setBusy(true);
-  setStatus(proxyResolution ? `Building a simplified copy (${proxyResolution}³)…` : "Searching orientations…");
+  setStatus(proxyResolution ? "Building a simplified copy of the model…" : "Searching orientations…");
 
   // With the proxy, the first 20% is building it, not searching.
   const eta = etaTracker(proxyResolution ? 0.2 : 0.1);
@@ -2018,13 +2040,15 @@ optimizeBtnEl.addEventListener("click", () => {
     clearVoidsList();
     refreshVisualization();
 
-    const costLabel = msg.usedProxy ? `support cost on simplified copy (${msg.proxyTriangleCount!.toLocaleString()} triangles)` : "cost";
-    const toolChangeNote = msg.beforeToolChanges !== null && msg.afterToolChanges !== null
-      ? `, tool changes ≈ ${msg.beforeToolChanges.toLocaleString()} → ${msg.afterToolChanges.toLocaleString()} (${TOOL_CHANGE_LAYER_HEIGHT} mm layers)`
-      : optimizeFor !== "support" ? " (single color, so optimized for least support)" : "";
-    const optimizeStatus = `Optimized: ${costLabel} ${msg.beforeCost.toFixed(1)} → ${msg.afterCost.toFixed(1)}${toolChangeNote}`;
+    const optimizeStatus = `Optimized: ${describeSupportChange(msg.beforeCost, msg.afterCost)}${msg.usedProxy ? " (estimated on the simplified copy)" : ""}${
+      msg.beforeToolChanges !== null && msg.afterToolChanges !== null
+        ? `; tool changes ${msg.beforeToolChanges.toLocaleString()} → ${msg.afterToolChanges.toLocaleString()}`
+        : optimizeFor !== "support" ? "; one color only, so turned for least support" : ""
+    }.`;
+    // The session log keeps the raw numbers.
+    const costNote = `support cost ${msg.beforeCost.toFixed(1)} → ${msg.afterCost.toFixed(1)}${msg.usedProxy ? ` on a copy of ${msg.proxyTriangleCount!.toLocaleString()} triangles` : ""}${msg.beforeToolChanges !== null ? `; tool changes counted for ${TOOL_CHANGE_LAYER_HEIGHT} mm layers` : ""}`;
     setStatus(optimizeStatus);
-    logEvent(optimizeStatus);
+    logEvent(`${optimizeStatus} (${costNote})`);
     worker?.terminate();
     worker = null;
     setBusy(false);
@@ -2065,14 +2089,14 @@ function runDetectVoids(triggeredBy: "cavity" | "tunnel") {
   listEl.innerHTML = "";
   updateApplyButtonState();
   clearCavityHighlights(triggeredBy);
-  setStatus(`Voxelizing at ${resolution}³…`);
+  setStatus(`Looking for ${pluralVoidWord(triggeredBy, 2)}…`);
 
   const eta = etaTracker();
   worker = new GeometryWorker();
   worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
     const msg = e.data;
     if (msg.type === "progress") {
-      setStatus(`Detecting ${pluralVoidWord(triggeredBy, 2)}… ${Math.round(msg.fraction * 100)}%${eta(msg.fraction)}`);
+      setStatus(`Looking for ${pluralVoidWord(triggeredBy, 2)}… ${Math.round(msg.fraction * 100)}%${eta(msg.fraction)}`);
       return;
     }
     if (msg.type !== "voids-detected") return;
@@ -2091,7 +2115,7 @@ function runDetectVoids(triggeredBy: "cavity" | "tunnel") {
       const largestCavity = Math.max(1, ...components.map((c) => c.voxelCount));
       cavityThresholdSliderEl.max = String(largestCavity);
       if (Number(cavityThresholdSliderEl.value) > largestCavity) cavityThresholdSliderEl.value = String(largestCavity);
-      cavityThresholdValueEl.textContent = `≤ ${Number(cavityThresholdSliderEl.value).toLocaleString()} voxels`;
+      updateThresholdLabel();
     } else {
       tunnelDetection = record; // selectedTunnelIds stays empty — never auto-populated, see its declaration
     }
@@ -2107,7 +2131,7 @@ function runDetectVoids(triggeredBy: "cavity" | "tunnel") {
     const highlightedIds = new Set(msg.highlights.map((h) => h.id));
     const highlightedCount = components.filter((c) => highlightedIds.has(c.id)).length;
     const highlightNote = highlightedCount < count
-      ? ` (largest ${highlightedCount} ${pluralVoidWord(triggeredBy, highlightedCount)} highlighted)`
+      ? ` (the largest ${highlightedCount} highlighted)`
       : "";
     const action = triggeredBy === "cavity" ? "Fill selected cavities" : "Fill selected tunnels";
     setStatus(`Found ${count} ${pluralVoidWord(triggeredBy, count)}${highlightNote} — review below, then ${action}.`);
@@ -2173,7 +2197,7 @@ function runFill(kind: "cavity" | "tunnel", selectedIds: Set<number>) {
   if (oversized.length > 0) {
     const pct = oversized.map((c) => `${Math.round(c.volumeFraction * 100)}%`).join(", ");
     setStatus(
-      `Won't fill: ${oversized.length} selected ${pluralVoidWord(kind, oversized.length)} ${oversized.length === 1 ? "covers" : "cover"} ${pct} of the model's own volume — that's not a real sealed pocket, it's open space the flood-fill swept in around/between parts of the structure. Uncheck it in the list (try a higher detection resolution if you think it's wrong).`,
+      `Not filled: ${oversized.length} selected ${pluralVoidWord(kind, oversized.length)} ${oversized.length === 1 ? "takes up" : "take up"} ${pct} of the model's volume. That is open space between parts of the structure, not a closed pocket. Uncheck ${oversized.length === 1 ? "it" : "them"} in the list, or try a higher detection detail if this looks wrong.`,
       true,
     );
     return;
@@ -2193,9 +2217,7 @@ function runFill(kind: "cavity" | "tunnel", selectedIds: Set<number>) {
 
   setBusy(true);
   setStatus(
-    beforeCost === null
-      ? `Filling ${idsToFill.length} selected ${pluralVoidWord(kind, idsToFill.length)}…`
-      : `Filling ${idsToFill.length} selected ${pluralVoidWord(kind, idsToFill.length)}… before cost ${beforeCost.toFixed(1)}`,
+    `Filling ${idsToFill.length} selected ${pluralVoidWord(kind, idsToFill.length)}…`,
   );
 
   const eta = etaTracker();
@@ -2308,17 +2330,21 @@ function runFill(kind: "cavity" | "tunnel", selectedIds: Set<number>) {
     clearVoidsList(); // mesh changed — previous detection ids no longer apply
 
     const patchTriCount = msg.patchPosition.length / 9;
-    const skippedNote = msg.skippedCount > 0
+    const skipped = msg.skippedCount;
+    const wasWere = skipped === 1 ? "was" : "were";
+    const skippedNote = skipped > 0
       ? kind === "cavity"
-        ? ` (${msg.skippedCount} skipped — pockets of a few voxels at most, right at the outer surface, with no wall to anchor a seal to.)`
-        : ` (${msg.skippedCount} skipped — too thin at this detection resolution to seal without risking a protrusion; try a higher detection resolution.)`
+        ? ` ${skipped} very small ${pluralVoidWord(kind, skipped)} right under the outer surface ${wasWere} left open: there is nothing there for a filling to hold on to.`
+        : ` ${skipped} ${pluralVoidWord(kind, skipped)} ${wasWere} too narrow to fill at this detection detail; choose a higher one and find tunnels again.`
       : "";
-    const sealedLabel = `Sealed ${msg.sealedCount} ${pluralVoidWord(kind, msg.sealedCount)} (${msg.filledVoxelCount.toLocaleString()} voxels, +${patchTriCount.toLocaleString()} interior triangles${msg.removedTriangles.length > 0 ? `, ${(msg.removedTriangles.length).toLocaleString()} inner-surface triangles removed` : ""}) — exterior surface unchanged.${msg.closedOffCount > 0 ? ` Also filled ${msg.closedOffCount} ${msg.closedOffCount === 1 ? "pocket" : "pockets"} the seals had closed off.` : ""}${skippedNote}`;
-    const fillStatus = beforeCost !== null && afterCost !== null
-      ? `${sealedLabel} Cost ${beforeCost.toFixed(1)} → ${afterCost.toFixed(1)}`
-      : sealedLabel;
+    const gapsNote = msg.closedOffCount > 0
+      ? ` Also filled ${msg.closedOffCount.toLocaleString()} thin ${msg.closedOffCount === 1 ? "gap" : "gaps"} the filling had closed off.`
+      : "";
+    const fillStatus = `Filled ${msg.sealedCount} ${pluralVoidWord(kind, msg.sealedCount)}. The outside of the model is unchanged.${gapsNote}${skippedNote}`;
+    // The session log keeps the numbers behind it.
+    const fillDetails = `${msg.filledVoxelCount.toLocaleString()} grid cubes, +${patchTriCount.toLocaleString()} triangles${msg.removedTriangles.length > 0 ? `, ${msg.removedTriangles.length.toLocaleString()} inner-surface triangles removed` : ""}${beforeCost !== null && afterCost !== null ? `, support cost ${beforeCost.toFixed(1)} → ${afterCost.toFixed(1)}` : ""}`;
     setStatus(fillStatus);
-    logEvent(fillStatus);
+    logEvent(`${fillStatus} (${fillDetails})`);
     worker?.terminate();
     worker = null;
     setBusy(false);
@@ -2359,8 +2385,8 @@ previewRaiseBtnEl.addEventListener("click", () => {
   frameObject(targets, camera, controls);
   setStatus(
     baseHeightMm > 0
-      ? `Previewing base raised to Z=${baseHeightMm.toFixed(2)}mm (view only — Export saves this; some slicers auto-drop imports back to the bed on their own).`
-      : "Preview reset to Z=0.",
+      ? `Showing the model raised by ${baseHeightMm.toFixed(2)} mm. This is only the view; the export saves it this way, though some slicers move a model back onto the plate when loading it.`
+      : "Showing the model on the plate again.",
   );
 });
 
@@ -2371,7 +2397,7 @@ exportBtnEl.addEventListener("click", async () => {
   const saved = await downloadMeshAsSTL(currentMesh, filename, baseHeightMm);
   if (!saved) return;
   const exportStatus = baseHeightMm > 0
-    ? `Exported ${filename} (base raised to Z=${baseHeightMm.toFixed(2)}mm)`
+    ? `Exported ${filename} (raised by ${baseHeightMm.toFixed(2)} mm)`
     : `Exported ${filename}`;
   setStatus(exportStatus);
   logEvent(exportStatus);
@@ -2403,12 +2429,12 @@ export3mfBtnEl.addEventListener("click", async () => {
     if (liveColorAttr) currentMesh.geometry.setAttribute("color", liveColorAttr);
   }
   if (!result.saved) return;
-  const raised = baseHeightMm > 0 ? ` (base raised to Z=${baseHeightMm.toFixed(2)}mm)` : "";
+  const raised = baseHeightMm > 0 ? ` (raised by ${baseHeightMm.toFixed(2)} mm)` : "";
   const how = result.mode === "painted"
     ? result.colorCount > 1
-      ? ` — one closed mesh, ${result.colorCount} colors painted onto extruders 1–${result.colorCount}${colorThroughEl.checked ? ", each colored all the way through" : ""}`
+      ? `: one part, ${result.colorCount} colors on extruders 1–${result.colorCount}${colorThroughEl.checked ? ", each chain one color all the way through" : ""}`
       : ""
-    : ` — more than ${MAX_PAINTED_COLORS} colors, so each color is its own part; slicers will report open edges where parts meet`;
+    : `: more than ${MAX_PAINTED_COLORS} colors, so each color is saved as its own part, and slicers will report open edges where the parts meet`;
   const exportStatus = `Exported ${filename}${raised}${how}`;
   setStatus(exportStatus);
   logEvent(exportStatus);

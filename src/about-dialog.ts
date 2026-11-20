@@ -59,7 +59,7 @@ function dialogHtml(version: string): string {
       <h3>Four steps to a print</h3>
       <ol>
         <li><strong>Load a model</strong> — drop an STL, PDB, mmCIF or 3MF file onto the viewer, or type a PDB ID under <em>1. Load model</em> and click Fetch (try <code>6LU7</code>).</li>
-        <li><strong>Fill cavities</strong> — under <em>3. Voids &amp; cavities</em>, click Find cavities, then Fill selected cavities.</li>
+        <li><strong>Fill cavities</strong> — under <em>3. Cavities &amp; tunnels</em>, click Find cavities, then Fill selected cavities.</li>
         <li><strong>Optimize the orientation</strong> — under <em>4. Optimize orientation</em>, click Optimize orientation.</li>
         <li><strong>Export</strong> — under <em>5. Export</em>, save an STL, or a 3MF that keeps each chain's color for printing in several colors.</li>
       </ol>

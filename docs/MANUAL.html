@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Support Optimizer Manual</title>
-<meta name="description" content="Manual and tutorial for Support Optimizer v1.1.0: loading structures, sealing voids, optimizing print orientation, and exporting.">
+<meta name="description" content="Manual and tutorial for Support Optimizer v1.1.1: loading structures, sealing voids, optimizing print orientation, and exporting.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -423,7 +423,7 @@
 
 <div class="shell">
   <nav class="sidebar" id="sidebar">
-    <div class="sidebar-brand"><span class="mark">v1.1.0</span><span class="name">Support Optimizer</span></div>
+    <div class="sidebar-brand"><span class="mark">v1.1.1</span><span class="name">Support Optimizer</span></div>
     <div class="sidebar-sub">Manual &amp; tutorial</div>
 
     <div class="navgroup">
@@ -437,7 +437,7 @@
       <a class="navlink" href="#ref-0">General controls</a>
       <a class="navlink" href="#ref-1">1. Load model</a>
       <a class="navlink" href="#ref-2">2. Scale &amp; view</a>
-      <a class="navlink" href="#ref-3">3. Voids &amp; cavities</a>
+      <a class="navlink" href="#ref-3">3. Cavities &amp; tunnels</a>
       <a class="navlink" href="#ref-4">4. Optimize orientation</a>
       <a class="navlink" href="#ref-5">5. Export</a>
     </div>
@@ -453,7 +453,7 @@
   <main>
     <div class="content">
 
-      <div class="eyebrow">Documentation &middot; v1.1.0</div>
+      <div class="eyebrow">Documentation &middot; v1.1.1</div>
       <h1 class="title">Support Optimizer</h1>
       <p class="lede">A tool for turning a molecular structure — or any mesh — into something ready to 3D print: it builds the surface from a protein or opens your 3D file, fills empty spaces closed off inside it, turns it so it needs the least support, and saves a file with its colors for your slicer.</p>
 
@@ -542,7 +542,7 @@
           <div class="step-num">3</div>
           <div class="step-body">
             <div class="step-title">Find and fill cavities</div>
-            <div class="step-action">Section 3 &middot; Voids &amp; cavities</div>
+            <div class="step-action">Section 3 &middot; Cavities &amp; tunnels</div>
             <p>Click <strong>Find cavities</strong>. The list shows every <strong>cavity</strong> — an empty space closed off on all sides inside the model — each checked for filling and highlighted on the model (magenta = will fill, orange = left open). The slicer would print each one as a hollow space, and any support it puts inside could never be removed. Then click <strong>Fill selected cavities</strong>. Grooves and pockets you can see from outside aren't cavities and stay as they are.</p>
             <p>Under <strong>All settings</strong> you can also look for <strong>tunnels</strong>: narrow channels open to the outside, often where two chains meet. None are selected, since filling one changes the model's shape; check only the ones you want closed.</p>
           </div>
@@ -671,7 +671,7 @@
       </section>
 
       <section class="doc-section" id="ref-3">
-        <div class="ref-badge-row"><div class="ref-badge">3</div><h2 class="section-title" style="border:none;padding:0;margin:0;">Voids &amp; cavities</h2></div>
+        <div class="ref-badge-row"><div class="ref-badge">3</div><h2 class="section-title" style="border:none;padding:0;margin:0;">Cavities &amp; tunnels</h2></div>
         <p class="section-kicker">Finding and closing interior empty space, before it becomes trapped support material.</p>
 
         <p>A <strong>cavity</strong> is an empty space closed off on all sides inside the model. You can't see it from outside, but the slicer prints it as a hollow space with walls of its own, and any support it puts inside can never be removed. A <strong>tunnel</strong> is a narrow channel through the model that is open to the outside, most often along the seam where two chains meet but don't quite close. Grooves and pockets open to the surface are neither — they are part of the model's shape and are never listed.</p>
@@ -679,12 +679,12 @@
         <p>Cavities and tunnels each have their own Find button, list and Fill button. Finding one kind leaves the other list and its selection untouched.</p>
         <p class="howto"><strong>How it works:</strong> the model is divided into a grid of small cubes (voxels), and the empty cubes that can be reached from outside are marked. Empty cubes that can't be reached are cavities; reachable ones inside the model's outline are tunnels. Everything inside the model's surface counts as solid first — the way a slicer merges overlapping parts — so the space where chains overlap is never listed. A cavity inside one chain also has its own closed inner surface in the mesh, which is how cavities smaller than a grid cube are found (down to an eighth of one).</p>
 
-        <h4 class="control-title">Void detection resolution</h4>
+        <h4 class="control-title">Detection detail</h4>
         <p>How small a cavity can be and still be found. Higher finds smaller and narrower cavities, and the filling follows their shape more closely, but it takes longer. Medium suits most prints.</p>
         <p>It also matters for large prints. A cavity joined to the outside only by a very narrow slit counts as closed, and filling it closes the slit as well. At Medium, slits narrower than about 1/64 of the model's longest side count as closed; at High, 1/128. So for a large print, a higher setting keeps more of the surface's fine detail open.</p>
 
         <h3 class="sub-title"><span class="swatch" style="background:var(--cavity)"></span>Cavities</h3>
-        <p>Every cavity found is checked for filling. Turn on <strong>Custom auto-select size limit</strong> to check only cavities up to a size you choose — for example to leave large cavities open. You can still check or uncheck each cavity in the list yourself.</p>
+        <p>Every cavity found is checked for filling. Turn on <strong>Only check cavities up to a size I set</strong> to check only cavities up to a size you choose — for example to leave large cavities open. You can still check or uncheck each cavity in the list yourself.</p>
 
         <h4 class="control-title">Fill selected cavities</h4>
         <p>Makes the selected cavities solid, so the slicer doesn't print hollow spaces inside your model. The outside of the model stays exactly as it is.</p>
@@ -713,7 +713,7 @@
         <div class="ref-badge-row"><div class="ref-badge">4</div><h2 class="section-title" style="border:none;padding:0;margin:0;">Optimize orientation</h2></div>
         <p class="section-kicker">Turning the model so it needs the least support.</p>
 
-        <h4 class="control-title">Critical overhang angle</h4>
+        <h4 class="control-title">Overhang threshold</h4>
         <p>How steep an overhang your printer can print without support. A surface that leans further than this from vertical needs support and shows in red. 0&deg; is a vertical wall; 90&deg; is a flat ceiling facing down. Most FDM printers manage about 45&deg;, resin printers often more. Everything in this step uses this angle: what Optimize minimizes, and where the support preview starts.</p>
         <p><strong>Lower angles take longer.</strong> More surfaces count as overhangs, and each has to be checked — on a test sphere, 30&deg; took about twice as long as 45&deg;, and 15&deg; about three times as long.</p>
         <p class="howto"><strong>How it works:</strong> each triangle's lean is</p>
@@ -764,7 +764,7 @@
 
         <p>Exports use the model's orientation from Optimize. Rotating the view with the mouse doesn't change what is saved. The desktop app asks where to save; in a browser, the file goes to your usual downloads folder.</p>
 
-        <h4 class="control-title">Raise base to Z</h4>
+        <h4 class="control-title">Raise the model</h4>
         <p>Raises the exported model so its lowest point sits at this height instead of on the plate — for printing a separate breakaway support or interface layer below it. Only the saved file is raised; the model on screen stays on the plate. <strong>Preview</strong> shows the raise on screen first. Many slicers drop a loaded model back onto the plate anyway; check your slicer if the height doesn't stick.</p>
 
         <h4 class="control-title">Export STL</h4>
@@ -831,7 +831,7 @@
 
         <h3 class="sub-title">Working with very large structures</h3>
         <p>Leave the surface detail on Auto, and let Optimize search on a simplified copy (Quick start does this by itself; the app suggests it past about 20,000 triangles). Both keep the slowest calculations off the full model, without changing the model you export.</p>
-        <p>While a long step runs, the status line shows roughly how much time is left, once the step is far enough along to estimate it. A low critical overhang angle makes Optimize noticeably slower (see <a href="#ref-4">Critical overhang angle</a>).</p>
+        <p>While a long step runs, the status line shows roughly how much time is left, once the step is far enough along to estimate it. A low overhang threshold makes Optimize noticeably slower (see <a href="#ref-4">Critical overhang angle</a>).</p>
 
         <h3 class="sub-title">Small floating pieces in the slicer</h3>
         <p>Look at <strong>Ligands &amp; ions found</strong> in section 1: a loose ion or crystallization additive sitting apart from the structure prints as its own tiny fragment. Uncheck it and Apply. (Water, the most common cause, is already excluded.)</p>
@@ -840,7 +840,7 @@
         <p>Two kinds of empty space can remain after <strong>Fill selected cavities</strong>. Thin gaps between touching chains, too thin for the detection grid to see, are left on purpose: they print as a clear edge between subunits. And rarely, filling a cavity closes the wide opening of a chamber next to it that is still joined to the outside by a slit thinner than one print layer. The slicer then prints that chamber as a small hollow — in tests on 11 structures, one such hollow of about 19&nbsp;mm³ remained, in a 100&nbsp;mm print. Neither is a loose piece; both print as a hollow with walls of their own.</p>
 
         <h3 class="sub-title">If a tunnel gets skipped</h3>
-        <p>Tunnels narrower than about three grid cubes are skipped. Raise <strong>Void detection resolution</strong> a step or two and click <strong>Find tunnels</strong> again.</p>
+        <p>Tunnels narrower than about three grid cubes are skipped. Raise <strong>Detection detail</strong> a step or two and click <strong>Find tunnels</strong> again.</p>
 
         <h3 class="sub-title">STL or 3MF?</h3>
         <div class="tbl-wrap">
@@ -891,7 +891,7 @@
       </section>
 
       <footer class="docfoot">
-        Support Optimizer &middot; manual updated for v1.1.0. If this page and an in-app "?" help panel ever disagree, the in-app text is closer to the running code.
+        Support Optimizer &middot; manual updated for v1.1.1. If this page and an in-app "?" help panel ever disagree, the in-app text is closer to the running code.
       </footer>
 
     </div>

@@ -7,6 +7,13 @@ export interface ReleaseNotes {
 
 export const WHATS_NEW: ReleaseNotes[] = [
   {
+    version: "1.1.1",
+    items: [
+      "Clearer messages. The status line now says in plain words what each step did, for example \"Filled 42 cavities. The outside of the model is unchanged.\" or \"Optimized: about 7% less support; tool changes 1,256 → 930.\" The detailed numbers are still in the session log.",
+      "Plainer labels. Section 3 is now \"Cavities & tunnels\", and settings read \"Detection detail\", \"Overhang threshold\" and \"Raise the model by (mm)\". Cavity sizes and the size limit are shown in mm³ instead of voxels, and the detail settings no longer show grid sizes such as 64³.",
+    ],
+  },
+  {
     version: "1.1.0",
     items: [
       "New: <strong>Quick start</strong> and <strong>All settings</strong>. Quick start shows each step's main buttons with good defaults; All settings shows every control. The welcome dialog asks which you prefer, and a switch at the top of the panel changes it any time.",

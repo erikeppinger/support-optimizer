@@ -30,10 +30,8 @@ jobs:
           # Update this before tagging each release — see the assets
           # below to download and install for your platform.
           RELEASE_BODY: |
-            - New: Quick start and All settings. Quick start shows each step's main buttons with good defaults; All settings shows every control. The welcome dialog asks which you prefer, and a switch at the top of the panel changes it any time.
-            - Optimize can now also cut down color changes for prints in several colors. Least support turns the model so it needs the least support material; Fewest tool changes turns it so the printer switches colors less often, which saves time and purged filament; Balanced weighs both. The status line shows how many changes the print needs before and after.
-            - Find cavities now also finds very small empty spaces sealed inside a single chain. They are closed on all sides, so you can't see them from outside, but the slicer would print each one as a tiny hollow space. Fill makes them solid. Grooves and pockets that are open to the surface are never touched.
-            - Fill leaves far fewer hollow spaces inside the print. Filling a cavity close to the outer wall could trap a thin empty gap between the fill and the wall; Fill now finds those and fills them too. The "Close gaps narrower than the nozzle" export option is removed, because it trapped new empty spaces instead of closing gaps.
+            - Clearer messages. The status line now says in plain words what each step did, for example "Filled 42 cavities. The outside of the model is unchanged." or "Optimized: about 7% less support; tool changes 1,256 → 930." The detailed numbers are still in the session log.
+            - Plainer labels. Section 3 is now "Cavities & tunnels", and settings read "Detection detail", "Overhang threshold" and "Raise the model by (mm)". Cavity sizes and the size limit are shown in mm³ instead of voxels, and the detail settings no longer show grid sizes such as 64³.
         with:
           # A personal access token, not the built-in GITHUB_TOKEN: since
           # 2026-10-01 the built-in one is refused when creating the release
